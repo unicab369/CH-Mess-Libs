@@ -1,7 +1,3 @@
-#include "ch32fun.h"
-#include <stdio.h>
-
-#include "../../fun_modules/systick_irq.h"
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
@@ -18,9 +14,14 @@ int main() {
 
 	printf("\r\nIR Receiver Test.\r\n");
 	funGpioInitAll();
-	fun_irReceiver_init(IR_RECEIVER_PIN);
+
+	IRReceiver_t receiver = {
+		.pin = IR_RECEIVER_PIN,
+	};
+
+	fun_irReceiver_init(&receiver);
 
 	while(1) {
-		fun_irReceiver_task(on_handle_irReceiver);
+		fun_irReceiver_task(&receiver, on_handle_irReceiver);
 	}
 }

@@ -1,7 +1,3 @@
-#include "ch32fun.h"
-#include <stdio.h>
-
-#include "../../fun_modules/systick_irq.h"
 #include "../../fun_modules/fun_irSender.h"
 
 #define IR_SENDER_PIN PD0

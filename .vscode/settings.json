@@ -4,6 +4,9 @@
         "fun_gpiosensor.h": "c",
         "fun_base.h": "c",
         "ch32fun.h": "c",
-        "fun_log.h": "c"
+        "fun_log.h": "c",
+        "systick_irq.h": "c",
+        "fun_crc.h": "c",
+        "fun_irreceiver.h": "c"
     }
 }

@@ -20,11 +20,10 @@
 // SOFTWARE.
 
 
-#include "ch32fun.h"
-#include <stdio.h>
+#include "fun_base.h"
 #include "fun_crc.h"
 
-#define IR_USE_TIM1_PWM
+// #define IR_USE_TIM1_PWM
 
 #define NEC_PULSE_WIDTH_US 560
 #define NEC_LOGIC_1_WIDTH_US 1680
