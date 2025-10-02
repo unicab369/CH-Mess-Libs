@@ -27,7 +27,7 @@
 #include <stdio.h>
 
 #include "fonts/font_5x7.h"
-#include "../fun_spi/lib/lib_spi.h"
+#include "fun_spi/lib/lib_spi.h"
 
 void print_bits(u32 val, u8 bit_count, u8 print_space) {
 	for(int i = bit_count-1; i >= 0; i--) {
