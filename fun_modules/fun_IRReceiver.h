@@ -22,24 +22,21 @@
 #include "fun_base.h"
 #include "fun_crc.h"
 
-// #define IR_RECEIVER_DEBUGLOG_ENABLE
+//# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
+#define IR_RECEIVER_DEBUGLOG 0
 
-// #define IR_RECEIVER_USE_TIM1
+//# Comment this line out to use the GPIO input ortherwise use the DMA input
+#define IR_RECEIVER_USE_TIM1
 
 //! For generating the mask/modulus, this must be a power of 2 size.
 #define IRREMOTE_MAX_PULSES 128
 #define TIM1_BUFFER_LAST_IDX (IRREMOTE_MAX_PULSES - 1)
 #define IRRECEIVER_BUFFER_SIZE 4
-
-typedef enum {
-	IR_Started,
-	IR_Idle,
-	IR_Parsing
-} IRReceiver_State_t;
+#define IRRECEIVER_DECODE_TIMEOUT_US 100000		// 100ms
 
 typedef struct {
 	int pin;
-	IRReceiver_State_t state;
+	int ir_started;
 	u16 ir_data[IRRECEIVER_BUFFER_SIZE];	// store the received data
 	
 	int prev_pinState;			// for gpio
@@ -47,10 +44,18 @@ typedef struct {
 
 	int16_t counter;			// store pulses count (for gpio) Or tails (for DMA)
 	u8 bits_processed;			// number of bits processed
-	u32 timeRef, timeout_duration_us;
+	u32 timeRef;
 	u32 pulse_buf[IRREMOTE_MAX_PULSES];
 } IRReceiver_t;
 
+
+void _irReciever_Restart(IRReceiver_t* model) {
+	model->ir_started = 0;
+	model->bits_processed = 0;
+	model->counter = 0;
+	model->prev_pinState = 0;
+	memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
+}
 
 #ifdef IR_RECEIVER_USE_TIM1
 	// TIM2_CH1 -> PD2 -> DMA1_CH2
@@ -64,12 +69,9 @@ typedef struct {
 	uint16_t ir_ticks_buff[IRREMOTE_MAX_PULSES];
 
 	void fun_irReceiver_init(IRReceiver_t* model) {
-		model->timeout_duration_us = 100000; 	// 100ms
-		model->state = IR_Idle;
-		model->counter = 0;
-
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 		funDigitalWrite(model->pin, 1);
+		_irReciever_Restart(model);
 
 		// Enable GPIOs
 		RCC->APB2PCENR |= RCC_APB2Periph_TIM1 | RCC_APB2Periph_AFIO;
@@ -114,24 +116,53 @@ typedef struct {
 
 	#define IR_LOGICAL_HIGH_THRESHOLD 300
 
-	void fun_irReceiver_task(IRReceiver_t* model, void(*handler)(u16, u16)) {
+	u16 outliner = 0;
+	
+	void fun_irReceiver_task(IRReceiver_t* model, void(*handler)(u16*, u8)) {
 			// Must perform modulus here, in case DMA_IN->CNTR == 0.
 		int head = (IRREMOTE_MAX_PULSES - IR_DMA_IN->CNTR) & TIM1_BUFFER_LAST_IDX;
-		u32 now = micros();
 
-		while( head != model->counter ) {
+		if( head != model->counter ) {
 			u32 time_of_event = ir_ticks_buff[model->counter];
 			u8 prev_event_idx = (model->counter-1) & TIM1_BUFFER_LAST_IDX;		// modulus to loop back
 			u32 prev_time_of_event = ir_ticks_buff[prev_event_idx];
 			u32 elapsed = time_of_event - prev_time_of_event;
 
-			// Performs modulus to loop back.
+			//! Performs modulus to loop back.
 			model->counter = (model->counter+1) & TIM1_BUFFER_LAST_IDX;
 
+			//! Timer overflow handling
+			if (time_of_event >= prev_time_of_event) {
+				elapsed = time_of_event - prev_time_of_event;
+			} else {
+				// Timer wrapped around (0xFFFF -> 0x0000)
+				elapsed = (65536 - prev_time_of_event) + time_of_event;
+			}
+
 			//! decode here
-			if (model->state == IR_Started) {
-				//# filter 2nd start frame (> 1000 ticks)
-				if (elapsed > 1000) continue;
+			if (model->ir_started) {
+				//! filter LOW start frame (> 1000 ticks)
+				if (elapsed > 700) {
+					#if IR_RECEIVER_DEBUGLOG > 0
+						printf("Frame LOW: %d\n", elapsed);
+					#endif
+					return;
+				}
+
+				//! handle outliner (SUPER hacky)
+				if (outliner > 0) {
+					elapsed += outliner;	// add prev outliner
+					outliner = 0;
+				}
+				//! look for outliner
+				if (elapsed < 150) {
+					#if IR_RECEIVER_DEBUGLOG > 0
+						printf("\n*** outliner: %d\n", elapsed);
+					#endif
+					outliner = elapsed;
+					return;
+				}
+
 				int bit_pos = 15 - (model->bits_processed & 0x0F);  // bits_processed % 16
 				int word_idx = model->bits_processed >> 4;          // bits_processed / 16
 				model->bits_processed++;
@@ -142,47 +173,58 @@ typedef struct {
 					model->ir_data[word_idx] |= (1 << bit_pos);		// MSB first (reversed)
 				}
 
-				#ifdef IR_RECEIVER_DEBUGLOG_ENABLE
-					printf("%d (%d) - 0x%04X \t [%d]%ld, [%d]%ld D%d\n",
-						elapsed, elapsed > IR_LOGICAL_HIGH_THRESHOLD,
+				#if IR_RECEIVER_DEBUGLOG > 0
+					const char *bit = elapsed > IR_LOGICAL_HIGH_THRESHOLD ? "1" : ".";
+
+					printf("%d 0x%04X %s - D%d",
+						elapsed,		// round to nearest 10
 						model->ir_data[word_idx],
-						model->counter, time_of_event, prev_event_idx, prev_time_of_event, bit_pos);
+						bit, bit_pos);
+
+					#if IR_RECEIVER_DEBUGLOG > 1
+						printf(" \t [%d]%ld, [%d]%ld", model->counter, time_of_event, 
+													prev_event_idx, prev_time_of_event);
+					#endif
+
+					printf("\n");
 					if (bit_pos % 8 == 0) printf("\n");
 				#endif
+
+				model->timeRef =  micros();
 			}
 
-			//# 1st start frame. Expect > 1200 ticks
+			//! filter HIGH start frame. Expect > 1200 ticks
 			else if (elapsed > 500) {
-				model->state = IR_Started;
-				model->timeRef = now;
+				#if IR_RECEIVER_DEBUGLOG > 0
+					printf("Frame HIGH: %d\n", elapsed);
+				#endif
+				model->ir_started = 1;
+				model->bits_processed = 0;
+				model->timeRef =  micros();
+				outliner = 0;
 			}
 		}
 
 		// handle timeout
-		if ((model->state == IR_Started) && 
-			((now - model->timeRef) > model->timeout_duration_us)
+		if ((model->ir_started) && 
+			(( micros() - model->timeRef) >IRRECEIVER_DECODE_TIMEOUT_US)
 		) {
 			if (model->bits_processed > 0) {
-				#ifdef IR_RECEIVER_DEBUGLOG_ENABLE
+				#if IR_RECEIVER_DEBUGLOG > 1
 					// printf("\nbits processed: %d\n", model->bits_processed);
-					printf( "0x%04X 0x%04X 0x%04X 0x%04X\n",
-						model->ir_data[0], model->ir_data[1], model->ir_data[2], model->ir_data[3] );
-
 					u64 combined = combine_64(model->ir_data[0], model->ir_data[1],
 											model->ir_data[2], model->ir_data[3]);
 					u8 check = crc16_ccitt_check64(combined, &combined);
 					printf("check: %d\n", check);
 				#endif
 
-				printf( "0x%04X 0x%04X 0x%04X 0x%04X\n",
-						model->ir_data[0], model->ir_data[1], model->ir_data[2], model->ir_data[3] );
-				handler(model->ir_data[0], model->ir_data[1]);
+				handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
 			}
 
 			//# clear out ir data
 			memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
-			model->state = IR_Idle;
-			model->bits_processed = 0;
+			model->ir_started = 0;
+			model->timeRef =  micros();
 		}
 	}
 
@@ -199,58 +241,54 @@ typedef struct {
 	#define IRREMOTE_PULSE_THRESHOLD_US 1000
 
 	void fun_irReceiver_init(IRReceiver_t* model) {
-		model->timeout_duration_us = 100000; 	// 100ms
-		model->state = IR_Idle;
-		model->prev_pinState = 0;
-		model->counter = 0;
-
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 		funDigitalWrite(model->pin, 1);
+		_irReciever_Restart(model);
 	}
 
-	u32 IR_durations[IRREMOTE_MAX_PULSES];
+	// u32 IR_durations[IRREMOTE_MAX_PULSES];
 
 	//# Decode IR signal
-	void _irReceiver_decode(IRReceiver_t* model, void (*handler)(u16, u16)) {
+	void _irReceiver_decode(IRReceiver_t* model, void (*handler)(u16*, u8)) {
 		if (model->counter < 1) return;
 
-		//# the first 2 pulses are start pulses
-		#ifdef IR_RECEIVER_DEBUGLOG_ENABLE
-			// start pulses: 9ms HIGH, 4.5ms LOW
+		//# Logs
+		#if IR_RECEIVER_DEBUGLOG == 1
 			printf("\nPulses: %d\n", model->counter);
-			printf("start pulses (us): %ld %ld\n", IR_durations[0], IR_durations[1]);
+			printf("start pulses (us): %ld %ld\n", model->pulse_buf[0], model->pulse_buf[1]);
+		#endif
 
+		//# Logs
+		#if IR_RECEIVER_DEBUGLOG > 1
 			u8 len_count = 0;
 			for (int i = 2; i < model->counter; i++) {
-				u16 rounded = 10 * (IR_durations[i] / 10);
+				u16 rounded = 10 * (model->pulse_buf[i] / 10);
 				printf((i%2 == 0) ? "\n%ld " : "-%ld ", rounded);
 				len_count++;
 				if (len_count%16 == 0) printf("\n"); // line seperator
 			}
 		#endif
 
+		//! start pulses: 9ms HIGH, 4.5ms LOW
+		if (model->pulse_buf[0] < 9000 || model->pulse_buf[1] < 4000) {
+			_irReciever_Restart(model);
+			return;
+		}
+
+		//! start from index 3 to skip start phases
 		for (int i = 3; i < model->counter; i += 2) {
 			if (model->bits_processed >= 16*IRRECEIVER_BUFFER_SIZE) break;
 
-			int word_idx = model->bits_processed >> 4;       // (>>4) is (/16)
-			int bit_pos = model->bits_processed & 0x0F;  	// (&0x0F) is (%16)
+			int word_idx = model->bits_processed >> 4;     			// (>>4) is (/16)
+			int bit_pos = 15 - (model->bits_processed & 0x0F);  	// (&0x0F) is (%16)
 			model->bits_processed++;
 
-			if (IR_durations[i] > IRREMOTE_PULSE_THRESHOLD_US) {
-				// MSB first (reversed)
-				model->ir_data[word_idx] |= (1 << (15 - bit_pos));
+			if (model->pulse_buf[i] > IRREMOTE_PULSE_THRESHOLD_US) {
+				model->ir_data[word_idx] |= 1 << bit_pos;		// MSB first (reversed)
 			}
 		}
 
-		handler(model->ir_data[0], model->ir_data[1]);
-
-		// #ifdef IR_RECEIVER_DEBUGLOG_ENABLE
-			printf("MSB First: ");
-			for (int i = 0; i < IRRECEIVER_BUFFER_SIZE; i++) {
-				printf("0x%04X ", model->ir_data[i]);
-			}
-			printf("\n");
-		// #endif
+		handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
 	}
 
 	void _irReceiver_update_PulseCount(IRReceiver_t* model, u8 pulse_count) {
@@ -260,34 +298,31 @@ typedef struct {
 	}
 
 	//# Receive IR task
-	void fun_irReceiver_task(IRReceiver_t* model, void (*handler)(u16, u16)) {
+	void fun_irReceiver_task(IRReceiver_t* model, void (*handler)(u16*, u8)) {
 		if (model->pin == -1) return;
 		model->current_pinState = funDigitalRead(model->pin);
 
-		if ((model->state == IR_Idle) && !model->current_pinState) {
-			model->state = IR_Started;
+		//! wait for first pulse
+		if (!model->ir_started && !model->current_pinState) {
+			model->ir_started = 1;
 			_irReceiver_update_PulseCount(model, 0);
-		}
-		else if ((model->state == IR_Started) && (model->current_pinState != model->prev_pinState)) {
-			model->state = IR_Parsing;
-			// State changed - record duration
-			IR_durations[model->counter] = micros() - model->timeRef;
-			_irReceiver_update_PulseCount(model, model->counter + 1);
-		}
-		else if ((model->state == IR_Parsing) && (model->current_pinState != model->prev_pinState)) {
-			// State changed - record duration
-			IR_durations[model->counter] = micros() - model->timeRef;
-			_irReceiver_update_PulseCount(model, model->counter + 1);      
-		}
-		else if (
-			((model->state == IR_Parsing) || (model->state == IR_Started))
-			&& (micros() - model->timeRef > model->timeout_duration_us)
-		) {
-			model->state = IR_Idle;
-			//! decode here
-			_irReceiver_decode(model, handler);
-			_irReceiver_update_PulseCount(model, 0);
-			model->bits_processed = 0;
+
+		} else if (model->ir_started) {
+			u32 elapsed = micros() - model->timeRef;
+
+			if (model->current_pinState != model->prev_pinState) {
+				//! State changed - record duration
+				model->pulse_buf[model->counter] = elapsed;
+				_irReceiver_update_PulseCount(model, model->counter + 1);
+
+			} else if (elapsed > IRRECEIVER_DECODE_TIMEOUT_US) {
+				//! decode here after timeout
+				_irReceiver_decode(model, handler);
+				_irReceiver_update_PulseCount(model, 0);
+
+				//! restart
+				_irReciever_Restart(model);
+			}
 		}
 	}
 #endif

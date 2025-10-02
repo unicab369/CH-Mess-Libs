@@ -2,9 +2,12 @@
 
 #define IR_RECEIVER_PIN PD2
 
-void on_handle_irReceiver(u16 address, u16 command) {
-	printf("NEC: 0x%04X 0x%04X\r\n", address, command);
-	printf("------------------------\r\n");
+void on_handle_irReceiver(u16 *data, u8 len) {
+	printf("\nNEC: ");
+	for (int i = 0; i < len; i++) {
+		printf("0x%04X ", data[i]);
+	}
+	printf("\r\n");
 }
 
 int main() {
