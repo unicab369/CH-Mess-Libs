@@ -72,16 +72,13 @@ u8 fun_irSender_init(u8 pin) {
 }
 
 
-#define NEC_LOGIC_1_WIDTH_US 610
-#define NEC_LOGIC_0_WIDTH_US 380
+#ifndef NEC_LOGIC_1_WIDTH_US
+	#define NEC_LOGIC_1_WIDTH_US 1680
+#endif
 
-// #ifndef NEC_LOGIC_1_WIDTH_US
-// 	#define NEC_LOGIC_1_WIDTH_US 1680
-// #endif
-
-// #ifndef NEC_LOGIC_0_WIDTH_US
-// 	#define NEC_LOGIC_0_WIDTH_US 560
-// #endif
+#ifndef NEC_LOGIC_0_WIDTH_US
+	#define NEC_LOGIC_0_WIDTH_US 560
+#endif
 
 
 //! ####################################

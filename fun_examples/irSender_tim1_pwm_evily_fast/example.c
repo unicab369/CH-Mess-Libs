@@ -1,3 +1,7 @@
+//! OVERWRITE
+#define NEC_LOGIC_1_WIDTH_US 610
+#define NEC_LOGIC_0_WIDTH_US 380
+
 #include "../../fun_modules/fun_irSender.h"
 
 #define IR_SENDER_PIN PD0

@@ -57,6 +57,16 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
 }
 
+
+#ifndef IR_LOGICAL_HIGH_THRESHOLD
+	#define IR_LOGICAL_HIGH_THRESHOLD 300
+#endif
+
+#ifndef IR_OUTLINER_THRESHOLD
+	#define IR_OUTLINER_THRESHOLD 150
+#endif
+
+
 #ifdef IR_RECEIVER_USE_TIM1
 	// TIM2_CH1 -> PD2 -> DMA1_CH2
 	#define IR_DMA_IN	DMA1_Channel2
@@ -113,12 +123,6 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	//! ####################################
 	//! RECEIVE FUNCTION USING DMA
 	//! ####################################
-
-	#define IR_LOGICAL_HIGH_THRESHOLD 170
-	#define IR_OUTLINER_THRESHOLD 100
-
-	// #define IR_LOGICAL_HIGH_THRESHOLD 300
-	// #define IR_OUTLINER_THRESHOLD 150
 
 	u16 outliner = 0;
 	

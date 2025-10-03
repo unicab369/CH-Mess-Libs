@@ -1,8 +1,9 @@
+#define IR_LOGICAL_HIGH_THRESHOLD 170
+#define IR_OUTLINER_THRESHOLD 100
+
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
-
-// #define IRREMOTE_PULSE_THRESHOLD_US 500
 
 void on_handle_irReceiver(u16 *data, u8 len) {
 	printf("\nNEC: ");
