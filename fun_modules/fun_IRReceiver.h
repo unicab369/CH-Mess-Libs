@@ -23,10 +23,10 @@
 #include "fun_crc.h"
 
 //# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
-#define IR_RECEIVER_DEBUGLOG 1
+#define IR_RECEIVER_DEBUGLOG 2
 
 //# Comment this line out to use the GPIO input ortherwise use the DMA input
-// #define IR_RECEIVER_USE_TIM1
+#define IR_RECEIVER_USE_TIM1
 
 //! For generating the mask/modulus, this must be a power of 2 size.
 #define IRREMOTE_MAX_PULSES 128
@@ -114,7 +114,11 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	//! RECEIVE FUNCTION USING DMA
 	//! ####################################
 
-	#define IR_LOGICAL_HIGH_THRESHOLD 300
+	#define IR_LOGICAL_HIGH_THRESHOLD 170
+	#define IR_OUTLINER_THRESHOLD 100
+
+	// #define IR_LOGICAL_HIGH_THRESHOLD 300
+	// #define IR_OUTLINER_THRESHOLD 150
 
 	u16 outliner = 0;
 	
@@ -155,7 +159,7 @@ void _irReciever_Restart(IRReceiver_t* model) {
 					outliner = 0;
 				}
 				//! look for outliner
-				if (elapsed < 150) {
+				if (elapsed < IR_OUTLINER_THRESHOLD) {
 					#if IR_RECEIVER_DEBUGLOG > 0
 						printf("\n*** outliner: %d\n", elapsed);
 					#endif
@@ -187,6 +191,7 @@ void _irReciever_Restart(IRReceiver_t* model) {
 					#endif
 
 					printf("\n");
+					// separator
 					if (bit_pos % 8 == 0) printf("\n");
 				#endif
 
@@ -235,10 +240,12 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	//! RECEIVE FUNCTIONS USING GPIO
 	//! ####################################
 
+	#define IRRECEIVER_PULSE_THRESHOLD_US 460
+
 	// low state: average 500us-600us
 	// high state: average 1500us-1700us
 	// estimated threshold: greater than 1000 for high state
-	#define IRREMOTE_PULSE_THRESHOLD_US 1000
+	// #define IRRECEIVER_PULSE_THRESHOLD_US 1000
 
 	void fun_irReceiver_init(IRReceiver_t* model) {
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
@@ -249,24 +256,21 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	// u32 IR_durations[IRREMOTE_MAX_PULSES];
 
 	//# Decode IR signal
-	void _irReceiver_decode(IRReceiver_t* model, void (*handler)(u16*, u8)) {
+	void _irReceiver_DECODE(IRReceiver_t* model, void (*handler)(u16*, u8)) {
 		if (model->counter < 1) return;
 
 		//# Logs
-		#if IR_RECEIVER_DEBUGLOG == 1
+		#if IR_RECEIVER_DEBUGLOG > 1
 			printf("\nPulses: %d\n", model->counter);
 			printf("start pulses (us): %ld %ld\n", model->pulse_buf[0], model->pulse_buf[1]);
-		#endif
 
-		//# Logs
-		#if IR_RECEIVER_DEBUGLOG > 1
-			u8 len_count = 0;
-			for (int i = 2; i < model->counter; i++) {
-				u16 rounded = 10 * (model->pulse_buf[i] / 10);
-				printf((i%2 == 0) ? "\n%ld " : "-%ld ", rounded);
-				len_count++;
-				if (len_count%16 == 0) printf("\n"); // line seperator
-			}
+			// u8 len_count = 0;
+			// for (int i = 2; i < model->counter; i++) {
+			// 	u16 rounded = 10 * (model->pulse_buf[i] / 10);
+			// 	printf((i%2 == 0) ? "\n%ld " : "-%ld ", rounded);
+			// 	len_count++;
+			// 	if (len_count%16 == 0) printf("\n"); // line seperator
+			// }
 		#endif
 
 		//! start pulses: 9ms HIGH, 4.5ms LOW
@@ -282,10 +286,18 @@ void _irReciever_Restart(IRReceiver_t* model) {
 			int word_idx = model->bits_processed >> 4;     			// (>>4) is (/16)
 			int bit_pos = 15 - (model->bits_processed & 0x0F);  	// (&0x0F) is (%16)
 			model->bits_processed++;
+			int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
 
-			if (model->pulse_buf[i] > IRREMOTE_PULSE_THRESHOLD_US) {
+			//! collect the data
+			if (bit) {
 				model->ir_data[word_idx] |= 1 << bit_pos;		// MSB first (reversed)
 			}
+
+			const char *bitStr = bit ? "1" : ".";
+			printf("%d \t %s \t 0x%04X D%d\n",
+				model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
+			// separator
+			if (bit_pos % 8 == 0) printf("\n");
 		}
 
 		handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
@@ -317,7 +329,7 @@ void _irReciever_Restart(IRReceiver_t* model) {
 
 			} else if (elapsed > IRRECEIVER_DECODE_TIMEOUT_US) {
 				//! decode here after timeout
-				_irReceiver_decode(model, handler);
+				_irReceiver_DECODE(model, handler);
 				_irReceiver_update_PulseCount(model, 0);
 
 				//! restart

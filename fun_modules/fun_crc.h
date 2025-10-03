@@ -1,6 +1,8 @@
 #include "ch32fun.h"
 #include <stdio.h>
 
+// #define CRC_DEBUG_LOG
+
 // CRC-16-CCITT (common in communications)
 #define CRC16_CCITT_POLY 0x1021
 
@@ -51,8 +53,10 @@ int crc16_ccitt_check64(uint64_t packed_data, uint64_t *extracted_data) {
     uint16_t received_crc = packed_data & 0xFFFF;
     uint16_t calculated_crc = crc16_ccitt_compute(packed_data);
     
-    printf("received_crc: 0x%04X\r\n", received_crc);
-    printf("calculated_crc: 0x%04X\r\n", calculated_crc);
+    #ifdef CRC_DEBUG_LOG
+        printf("received_crc: 0x%04X\r\n", received_crc);
+        printf("calculated_crc: 0x%04X\r\n", calculated_crc);
+    #endif
     
     if (received_crc == calculated_crc) {
         // Return the original data (with last 2 bytes cleared)
