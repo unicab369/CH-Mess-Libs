@@ -31,7 +31,7 @@
 //! For generating the mask/modulus, this must be a power of 2 size.
 #define IRREMOTE_MAX_PULSES 128
 #define TIM1_BUFFER_LAST_IDX (IRREMOTE_MAX_PULSES - 1)
-#define IRRECEIVER_DECODE_TIMEOUT_US 50000		// 50ms
+#define IRRECEIVER_DECODE_TIMEOUT_US 100000		// 50ms
 #define IRRECEIVER_BUFFER_SIZE 4
 
 typedef struct {
@@ -42,20 +42,11 @@ typedef struct {
 	int prev_pinState;			// for gpio
 	int current_pinState;		// for gpio
 
-	int16_t counter;			// store pulses count (for gpio) Or tails (for DMA)
+	int16_t counterIdx;			// store pulses count (for gpio) Or tails (for DMA)
 	u32 bits_processed;			// number of bits processed
 	u32 timeRef;
-	u32 pulse_buf[IRREMOTE_MAX_PULSES];
+	u16 pulse_buf[IRREMOTE_MAX_PULSES];
 } IRReceiver_t;
-
-
-void _irReciever_Restart(IRReceiver_t* model) {
-	model->ir_started = 0;
-	model->bits_processed = 0;
-	model->counter = 0;
-	model->prev_pinState = 0;
-	memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
-}
 
 
 #ifndef IR_LOGICAL_HIGH_THRESHOLD
@@ -66,6 +57,12 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	#define IR_OUTLINER_THRESHOLD 150
 #endif
 
+
+void _irReceiver_clearData(IRReceiver_t* model) {
+	model->bits_processed = 0;
+	model->counterIdx = 0;
+	memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
+}
 
 #ifdef IR_RECEIVER_USE_TIM1
 	// TIM2_CH1 -> PD2 -> DMA1_CH2
@@ -81,7 +78,7 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	void fun_irReceiver_init(IRReceiver_t* model) {
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 		funDigitalWrite(model->pin, 1);
-		_irReciever_Restart(model);
+		model->ir_started = 0;
 
 		// Enable GPIOs
 		RCC->APB2PCENR |= RCC_APB2Periph_TIM1 | RCC_APB2Periph_AFIO;
@@ -130,14 +127,14 @@ void _irReciever_Restart(IRReceiver_t* model) {
 			// Must perform modulus here, in case DMA_IN->CNTR == 0.
 		int head = (IRREMOTE_MAX_PULSES - IR_DMA_IN->CNTR) & TIM1_BUFFER_LAST_IDX;
 
-		if( head != model->counter ) {
-			u32 time_of_event = ir_ticks_buff[model->counter];
-			u8 prev_event_idx = (model->counter-1) & TIM1_BUFFER_LAST_IDX;		// modulus to loop back
+		if( head != model->counterIdx ) {
+			u32 time_of_event = ir_ticks_buff[model->counterIdx];
+			u8 prev_event_idx = (model->counterIdx-1) & TIM1_BUFFER_LAST_IDX;		// modulus to loop back
 			u32 prev_time_of_event = ir_ticks_buff[prev_event_idx];
 			u32 elapsed = time_of_event - prev_time_of_event;
 
 			//! Performs modulus to loop back.
-			model->counter = (model->counter+1) & TIM1_BUFFER_LAST_IDX;
+			model->counterIdx = (model->counterIdx+1) & TIM1_BUFFER_LAST_IDX;
 
 			//! Timer overflow handling
 			if (time_of_event >= prev_time_of_event) {
@@ -190,7 +187,7 @@ void _irReciever_Restart(IRReceiver_t* model) {
 						bit, bit_pos);
 
 					#if IR_RECEIVER_DEBUGLOG > 1
-						printf(" \t [%d]%ld, [%d]%ld", model->counter, time_of_event, 
+						printf(" \t [%d]%ld, [%d]%ld", model->counterIdx, time_of_event, 
 													prev_event_idx, prev_time_of_event);
 					#endif
 
@@ -254,85 +251,127 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	#endif
 
 	void fun_irReceiver_init(IRReceiver_t* model) {
+		printf("IRReceiver init\n");
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 		funDigitalWrite(model->pin, 1);
-		_irReciever_Restart(model);
+
+		//! restart states
+		model->ir_started = 0;
+		model->current_pinState = 0;
+		model->prev_pinState = 0;
 	}
 
-	void _irReceiver_update_PulseCount(IRReceiver_t* model, u8 pulse_count) {
-		model->counter = pulse_count;
-		model->timeRef = micros();
-		model->prev_pinState = model->current_pinState;
+	void _irReceiver_debugLog(IRReceiver_t* model) {
+		//# Logs
+		#if IR_RECEIVER_DEBUGLOG > 1
+			for (int i = 0; i < model->counterIdx; i += 1) {
+				int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
+				printf("%d %d\n", model->pulse_buf[i], bit);
+			}
+		#endif
 	}
 
 	//# Receive IR task
+	//! IMPORTANTE: printf statements introduce delays
 	void fun_irReceiver_task(IRReceiver_t* model, void (*handler)(u16*, u8)) {
 		if (model->pin == -1) return;
 		model->current_pinState = funDigitalRead(model->pin);
 
-		//! wait for first pulse
+		//# STEP 1: wait for first pulse
 		if (!model->ir_started && !model->current_pinState) {
 			model->ir_started = 1;
-			_irReceiver_update_PulseCount(model, 0);
 
-		} else if (model->ir_started) {
-			u32 elapsed = micros() - model->timeRef;
+			//! clear pulses count
+			model->counterIdx = 0;
+			model->timeRef = micros();
+			model->prev_pinState = model->current_pinState;
+		}
 
+		//# STEP 2: detecting first pulses
+		else if (model->ir_started == 1) {
 			if (model->current_pinState != model->prev_pinState) {
 				//! State changed - record duration
-				model->pulse_buf[model->counter] = elapsed;
-				_irReceiver_update_PulseCount(model, model->counter + 1);
+				model->pulse_buf[model->counterIdx] = micros() - model->timeRef;
 
-			} else if (elapsed > IRRECEIVER_DECODE_TIMEOUT_US) {
-				//! decode here after timeout
-				if (model->counter > 0) {
-					//# Logs
-					#if IR_RECEIVER_DEBUGLOG > 1
-						printf("\nPulses: %d\n", model->counter);
-						printf("start pulses (us): %ld %ld\n", model->pulse_buf[0], model->pulse_buf[1]);
+				//! update pulses count
+				model->counterIdx++;
+				model->timeRef = micros();
+				model->prev_pinState = model->current_pinState;
 
-						// u8 len_count = 0;
-						// for (int i = 2; i < model->counter; i++) {
-						// 	u16 rounded = 10 * (model->pulse_buf[i] / 10);
-						// 	printf((i%2 == 0) ? "\n%ld " : "-%ld ", rounded);
-						// 	len_count++;
-						// 	if (len_count%16 == 0) printf("\n"); // line seperator
-						// }
-					#endif
-
-					//! start pulses: 9ms HIGH, 4.5ms LOW
-					if (model->pulse_buf[0] < 9000 || model->pulse_buf[1] < 4000) {
-						_irReciever_Restart(model);
-						return;
+				//! IMPORTANTE: printf statements introduce delays
+				//! start pulses: 9ms HIGH, 4.5ms LOW
+				if (model->counterIdx == 2) {
+					if (model->pulse_buf[0] > 3000 || model->pulse_buf[1] > 3000) {
+						model->ir_started = 2;	// start stage 2
+					} else {
+						model->ir_started = 0;	// restart
 					}
 
-					//! start from index 3 to skip start phases
-					for (int i = 3; i < model->counter; i += 2) {
-						if (model->bits_processed >= 16*IRRECEIVER_BUFFER_SIZE) break;
-
-						int word_idx = model->bits_processed >> 4;     			// (>>4) is (/16)
-						int bit_pos = 15 - (model->bits_processed & 0x0F);  	// (&0x0F) is (%16)
-						model->bits_processed++;
-						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
-
-						//! collect the data - MSB first (reversed)
-						if (bit) model->ir_data[word_idx] |= 1 << bit_pos;
-
-						const char *bitStr = bit ? "1" : ".";
-						printf("%d \t %s \t 0x%04X D%d\n",
-							model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
-						// separator
-						if (bit_pos % 8 == 0) printf("\n");
-					}
-
-					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
+					//! clear data
+					_irReceiver_clearData(model);
 				}
-
-				_irReceiver_update_PulseCount(model, 0);
-
-				//! restart
-				_irReciever_Restart(model);
 			}
 		}
+
+		//# STEP 3: handling data pulses
+		else if (model->ir_started == 2) {
+			if (model->current_pinState != model->prev_pinState) {
+				//! State changed - record duration
+				if (!model->current_pinState) {
+					model->pulse_buf[model->counterIdx] = micros() - model->timeRef;
+					model->counterIdx++;
+				}
+				
+				model->timeRef = micros();
+				model->prev_pinState = model->current_pinState;
+				
+				if (model->counterIdx >= IRRECEIVER_BUFFER_SIZE*2*8) {
+					_irReceiver_debugLog(model);
+
+					// even elements are low signals
+					for (int i = 0; i < model->counterIdx; i += 1) {
+						int word_idx = model->bits_processed >> 4;     		// >>4 is /16
+						int bit_pos = 15 - (model->bits_processed & 0x0F);  // &0x0F is %16
+						model->bits_processed++;
+
+						//! collect the data - MSB first (reversed)
+						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
+						if (bit) model->ir_data[word_idx] |= 1 << bit_pos;
+
+						#if IR_RECEIVER_DEBUGLOG == 1
+							const char *bitStr = bit ? "1" : ".";
+							printf("%d \t %s \t 0x%04X D%d\n",
+								model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
+							// separator
+							if (bit_pos % 8 == 0) printf("\n");
+						#endif
+					}
+
+					//# STEP 4: handle completed packet
+					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
+
+					//! clear data
+					_irReceiver_clearData(model);
+				}
+			}
+
+			//# STEP 5: handle outout - restart states
+			else if (micros() - model->timeRef > IRRECEIVER_DECODE_TIMEOUT_US) {
+				// for (int i = 0; i < model->counterIdx; i += 1) {
+				// 	int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
+				// 	printf("%d %d\n", model->pulse_buf[i], bit);
+				// }
+				// printf("\n");
+
+				//! restart states
+				model->ir_started = 0;
+				model->current_pinState = 0;
+				model->prev_pinState = 0;
+
+				//! clear data
+				_irReceiver_clearData(model);
+			}	
+		}
 	}
+
 #endif

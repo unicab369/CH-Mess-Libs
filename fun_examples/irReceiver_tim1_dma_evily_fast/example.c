@@ -8,9 +8,26 @@
 
 #define IR_RECEIVER_PIN PD2
 
-void on_handle_irReceiver(u16 *data, u8 len) {
+void on_handle_irReceiver(u16 *data, u16 len) {
+	// for (u16 i = 0; i < len; i++) {
+	// 	ir_data[len_count++] = data[i];
+	// }
+
+	// if (len_count > 30) {
+	// 	len_count = 0;
+	// 	printf("\nNEC: ");
+	// 	for (u16 i = 0; i < 100; i++) {
+	// 		if (ir_data[i] == 0) {
+	// 			break;
+	// 		}
+	// 		printf("0x%04X \n", ir_data[i]);
+	// 	}
+	// 	printf("\r\n");
+	// 	len_count = 0;
+	// }
+
 	printf("\nNEC: ");
-	for (int i = 0; i < len; i++) {
+	for (u16 i = 0; i < len; i++) {
 		printf("0x%04X ", data[i]);
 	}
 	printf("\r\n");
