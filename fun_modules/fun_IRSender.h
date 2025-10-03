@@ -24,7 +24,7 @@
 #include "fun_crc.h"
 
 
-#define IR_SENDER_DEBUGLOG 0
+// #define IR_SENDER_DEBUGLOG 0
 
 #define IR_USE_TIM1_PWM
 
@@ -149,6 +149,21 @@ void fun_irSender_send(u16 address, u16 command, u16 extra) {
 	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, 1000);
 }
 
+void fun_irSender_sendMessages() {
+	_IR_carrier_pulse(9000, 4500);
+
+	u16 data = 0x0000;
+
+	for (int i = 0; i < 50; i++) {
+		fun_irSend_NECData(data);
+		data++;
+		printf("sent: 0x%04X\n", data);
+	}
+	printf("\n");
+
+	// Stop bit
+	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, 1000);
+}
 
 	//! ####################################
 //! ASYNC TRANSMIT FUNCTIONS

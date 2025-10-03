@@ -23,16 +23,16 @@
 #include "fun_crc.h"
 
 //# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
-#define IR_RECEIVER_DEBUGLOG 2
+#define IR_RECEIVER_DEBUGLOG 0
 
 //# Comment this line out to use the GPIO input ortherwise use the DMA input
-#define IR_RECEIVER_USE_TIM1
+// #define IR_RECEIVER_USE_TIM1
 
 //! For generating the mask/modulus, this must be a power of 2 size.
 #define IRREMOTE_MAX_PULSES 128
 #define TIM1_BUFFER_LAST_IDX (IRREMOTE_MAX_PULSES - 1)
+#define IRRECEIVER_DECODE_TIMEOUT_US 50000		// 50ms
 #define IRRECEIVER_BUFFER_SIZE 4
-#define IRRECEIVER_DECODE_TIMEOUT_US 100000		// 100ms
 
 typedef struct {
 	int pin;
@@ -43,7 +43,7 @@ typedef struct {
 	int current_pinState;		// for gpio
 
 	int16_t counter;			// store pulses count (for gpio) Or tails (for DMA)
-	u8 bits_processed;			// number of bits processed
+	u32 bits_processed;			// number of bits processed
 	u32 timeRef;
 	u32 pulse_buf[IRREMOTE_MAX_PULSES];
 } IRReceiver_t;
@@ -151,9 +151,9 @@ void _irReciever_Restart(IRReceiver_t* model) {
 			if (model->ir_started) {
 				//! filter LOW start frame (> 1000 ticks)
 				if (elapsed > 700) {
-					#if IR_RECEIVER_DEBUGLOG > 0
+					// #if IR_RECEIVER_DEBUGLOG > 0
 						printf("Frame LOW: %d\n", elapsed);
-					#endif
+					// #endif
 					return;
 				}
 
@@ -204,9 +204,9 @@ void _irReciever_Restart(IRReceiver_t* model) {
 
 			//! filter HIGH start frame. Expect > 1200 ticks
 			else if (elapsed > 500) {
-				#if IR_RECEIVER_DEBUGLOG > 0
+				// #if IR_RECEIVER_DEBUGLOG > 0
 					printf("Frame HIGH: %d\n", elapsed);
-				#endif
+				// #endif
 				model->ir_started = 1;
 				model->bits_processed = 0;
 				model->timeRef =  micros();
@@ -216,8 +216,10 @@ void _irReciever_Restart(IRReceiver_t* model) {
 
 		// handle timeout
 		if ((model->ir_started) && 
-			(( micros() - model->timeRef) >IRRECEIVER_DECODE_TIMEOUT_US)
+			(( micros() - model->timeRef) > IRRECEIVER_DECODE_TIMEOUT_US)
 		) {
+			printf("\nTimeout %d\n", micros() - model->timeRef);
+
 			if (model->bits_processed > 0) {
 				#if IR_RECEIVER_DEBUGLOG > 1
 					// printf("\nbits processed: %d\n", model->bits_processed);
@@ -244,67 +246,17 @@ void _irReciever_Restart(IRReceiver_t* model) {
 	//! RECEIVE FUNCTIONS USING GPIO
 	//! ####################################
 
-	#define IRRECEIVER_PULSE_THRESHOLD_US 460
-
 	// low state: average 500us-600us
 	// high state: average 1500us-1700us
 	// estimated threshold: greater than 1000 for high state
-	// #define IRRECEIVER_PULSE_THRESHOLD_US 1000
+	#ifndef IRRECEIVER_PULSE_THRESHOLD_US
+		#define IRRECEIVER_PULSE_THRESHOLD_US 1000
+	#endif
 
 	void fun_irReceiver_init(IRReceiver_t* model) {
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 		funDigitalWrite(model->pin, 1);
 		_irReciever_Restart(model);
-	}
-
-	// u32 IR_durations[IRREMOTE_MAX_PULSES];
-
-	//# Decode IR signal
-	void _irReceiver_DECODE(IRReceiver_t* model, void (*handler)(u16*, u8)) {
-		if (model->counter < 1) return;
-
-		//# Logs
-		#if IR_RECEIVER_DEBUGLOG > 1
-			printf("\nPulses: %d\n", model->counter);
-			printf("start pulses (us): %ld %ld\n", model->pulse_buf[0], model->pulse_buf[1]);
-
-			// u8 len_count = 0;
-			// for (int i = 2; i < model->counter; i++) {
-			// 	u16 rounded = 10 * (model->pulse_buf[i] / 10);
-			// 	printf((i%2 == 0) ? "\n%ld " : "-%ld ", rounded);
-			// 	len_count++;
-			// 	if (len_count%16 == 0) printf("\n"); // line seperator
-			// }
-		#endif
-
-		//! start pulses: 9ms HIGH, 4.5ms LOW
-		if (model->pulse_buf[0] < 9000 || model->pulse_buf[1] < 4000) {
-			_irReciever_Restart(model);
-			return;
-		}
-
-		//! start from index 3 to skip start phases
-		for (int i = 3; i < model->counter; i += 2) {
-			if (model->bits_processed >= 16*IRRECEIVER_BUFFER_SIZE) break;
-
-			int word_idx = model->bits_processed >> 4;     			// (>>4) is (/16)
-			int bit_pos = 15 - (model->bits_processed & 0x0F);  	// (&0x0F) is (%16)
-			model->bits_processed++;
-			int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
-
-			//! collect the data
-			if (bit) {
-				model->ir_data[word_idx] |= 1 << bit_pos;		// MSB first (reversed)
-			}
-
-			const char *bitStr = bit ? "1" : ".";
-			printf("%d \t %s \t 0x%04X D%d\n",
-				model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
-			// separator
-			if (bit_pos % 8 == 0) printf("\n");
-		}
-
-		handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
 	}
 
 	void _irReceiver_update_PulseCount(IRReceiver_t* model, u8 pulse_count) {
@@ -333,7 +285,49 @@ void _irReciever_Restart(IRReceiver_t* model) {
 
 			} else if (elapsed > IRRECEIVER_DECODE_TIMEOUT_US) {
 				//! decode here after timeout
-				_irReceiver_DECODE(model, handler);
+				if (model->counter > 0) {
+					//# Logs
+					#if IR_RECEIVER_DEBUGLOG > 1
+						printf("\nPulses: %d\n", model->counter);
+						printf("start pulses (us): %ld %ld\n", model->pulse_buf[0], model->pulse_buf[1]);
+
+						// u8 len_count = 0;
+						// for (int i = 2; i < model->counter; i++) {
+						// 	u16 rounded = 10 * (model->pulse_buf[i] / 10);
+						// 	printf((i%2 == 0) ? "\n%ld " : "-%ld ", rounded);
+						// 	len_count++;
+						// 	if (len_count%16 == 0) printf("\n"); // line seperator
+						// }
+					#endif
+
+					//! start pulses: 9ms HIGH, 4.5ms LOW
+					if (model->pulse_buf[0] < 9000 || model->pulse_buf[1] < 4000) {
+						_irReciever_Restart(model);
+						return;
+					}
+
+					//! start from index 3 to skip start phases
+					for (int i = 3; i < model->counter; i += 2) {
+						if (model->bits_processed >= 16*IRRECEIVER_BUFFER_SIZE) break;
+
+						int word_idx = model->bits_processed >> 4;     			// (>>4) is (/16)
+						int bit_pos = 15 - (model->bits_processed & 0x0F);  	// (&0x0F) is (%16)
+						model->bits_processed++;
+						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
+
+						//! collect the data - MSB first (reversed)
+						if (bit) model->ir_data[word_idx] |= 1 << bit_pos;
+
+						const char *bitStr = bit ? "1" : ".";
+						printf("%d \t %s \t 0x%04X D%d\n",
+							model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
+						// separator
+						if (bit_pos % 8 == 0) printf("\n");
+					}
+
+					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
+				}
+
 				_irReceiver_update_PulseCount(model, 0);
 
 				//! restart
