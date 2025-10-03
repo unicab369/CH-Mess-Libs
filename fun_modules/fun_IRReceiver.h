@@ -23,10 +23,10 @@
 #include "fun_crc.h"
 
 //# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
-#define IR_RECEIVER_DEBUGLOG 0
+#define IR_RECEIVER_DEBUGLOG 1
 
 //# Comment this line out to use the GPIO input ortherwise use the DMA input
-#define IR_RECEIVER_USE_TIM1
+// #define IR_RECEIVER_USE_TIM1
 
 //! For generating the mask/modulus, this must be a power of 2 size.
 #define IRREMOTE_MAX_PULSES 128
