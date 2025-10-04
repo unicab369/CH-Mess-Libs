@@ -154,13 +154,13 @@ void fun_irSender_send(u16 address, u16 command, u16 extra) {
 void fun_irSender_sendMessages() {
 	_IR_carrier_pulse(9000, 4500);
 
-	u16 data = 0x1111;
+	u16 data = 0x0000;
 
 	u32 ref = millis();
-	for (int i = 0; i < 200; i++) {
+	for (int i = 0; i < 40; i++) {
 		fun_irSend_NECData(data);
 		data++;
-		Delay_Us(5);
+		Delay_Us(10);
 	}
 	printf("messages in %d ms\r\n", millis() - ref);
 	printf("lasData: 0x%04X\r\n", data);

@@ -341,6 +341,8 @@ typedef struct {
 						int bit_pos = 15 - (model->bits_processed & 0x0F);  // &0x0F is %16
 						model->bits_processed++;
 
+						// printf("puslse buf: %d\n", model->pulse_buf[i]);
+
 						//! collect the data - MSB first (reversed)
 						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
 						if (bit) model->ir_data[word_idx] |= 1 << bit_pos;

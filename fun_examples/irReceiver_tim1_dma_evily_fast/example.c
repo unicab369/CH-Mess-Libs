@@ -2,13 +2,13 @@
 // #define IR_LOGICAL_HIGH_THRESHOLD 170
 // #define IR_OUTLINER_THRESHOLD 100
 
-// #define IRRECEIVER_PULSE_THRESHOLD_US 460
+#define IRRECEIVER_PULSE_THRESHOLD_US 900
 
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
 
-#define IR_TEST_BUFF_LEN 200
+#define IR_TEST_BUFF_LEN 60
 u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
 u16 IRReceiver_testIdx = 0;
 
@@ -29,7 +29,7 @@ void on_handle_irReceiver(u16 *data, u16 len) {
 				if (i % 8 == 7) printf("\n");
 				RReceiver_testbuff[i] = 0;
 			}
-			printf("----------\r\n");
+			printf("\r\n");
 		}
 		IRReceiver_testIdx = 0;
 	}
