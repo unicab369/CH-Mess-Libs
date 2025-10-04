@@ -2,7 +2,7 @@
 // #define IR_LOGICAL_HIGH_THRESHOLD 170
 // #define IR_OUTLINER_THRESHOLD 100
 
-#define IRRECEIVER_PULSE_THRESHOLD_US 900
+// #define IRRECEIVER_PULSE_THRESHOLD_US 1000
 
 #include "../../fun_modules/fun_irReceiver.h"
 

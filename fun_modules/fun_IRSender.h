@@ -142,28 +142,29 @@ void fun_irSender_send(u16 address, u16 command, u16 extra) {
 
 	_IR_carrier_pulse(9000, 4500);
 
-	fun_irSend_NECData(address);
-	fun_irSend_NECData(command);
-	fun_irSend_NECData(extra);
-	fun_irSend_NECData(crc);
+	fun_irSend_NECData(0x0000);
+	fun_irSend_NECData(0x0001);
+	fun_irSend_NECData(0x0002);
+	fun_irSend_NECData(0x0003);
 
 	// Stop bit
 	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, 1000);
 }
 
+
 void fun_irSender_sendMessages() {
 	_IR_carrier_pulse(9000, 4500);
 
+	u32 ref = millis();
 	u16 data = 0x0000;
 
-	u32 ref = millis();
-	for (int i = 0; i < 40; i++) {
+	for (int i = 0; i < 60; i++) {
 		fun_irSend_NECData(data);
 		data++;
-		Delay_Us(10);
+		// Delay_Us(5);
 	}
+
 	printf("messages in %d ms\r\n", millis() - ref);
-	printf("lasData: 0x%04X\r\n", data);
 	// printf("\n");
 }
 
