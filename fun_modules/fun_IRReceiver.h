@@ -24,7 +24,7 @@
 
 
 //# Comment this line out to use the GPIO input ortherwise use the DMA input
-// #define IR_RECEIVER_USE_TIM1
+#define IR_RECEIVER_USE_TIM1
 
 
 //# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
@@ -96,14 +96,14 @@ typedef struct {
 			DMA_CFGR1_EN;						// Enable
 		IR_DMA_IN->CNTR = IR_MAX_PULSES;
 
-		TIM1->PSC = 0x00ff;		// set TIM1 clock prescaler divider (Massive prescaler)
+		TIM1->PSC = 0x00DF;		// set TIM1 clock prescaler divider (Massive prescaler)
 		TIM1->ATRLR = 65535;	// set PWM total cycle width
 
 		//# Tim 1 input / capture (CC1S = 01)
 		TIM1->CHCTLR1 = TIM_CC1S_0;
 
 		//# Add here CC1P to switch from UP->GOING to DOWN->GOING log times.
-		TIM1->CCER = TIM_CC1E | TIM_CC1P;
+		TIM1->CCER = TIM_CC1E; // | TIM_CC1P;
 		
 		//# initialize counter
 		TIM1->SWEVGR = TIM_UG;
@@ -169,31 +169,27 @@ typedef struct {
 				model->bits_processed++;
 
 				//# STEP 3: Decode here, filter for Logical HIGH
-				// logical HIGH (~200 ticks), logical LOW (~100 ticks)
 				if (elapsed > IR_LOGICAL_HIGH_THRESHOLD) {
 					model->ir_data[word_idx] |= (1 << bit_pos);		// MSB first (reversed)
 				}
 
 				model->timeRef =  micros();
 				
-				//# Logging
-				// #if IR_RECEIVER_DEBUGLOG > 0
-				// 	const char *bit = elapsed > IR_LOGICAL_HIGH_THRESHOLD ? "1" : ".";
+				// # Logging
+				//! IMPORTANTE: printf statements introduce delays
+				#if IR_RECEIVER_DEBUGLOG > 0
+					// const char *bit = elapsed > IR_LOGICAL_HIGH_THRESHOLD ? "1" : ".";
 
-				// 	printf("%d 0x%04X %s - D%d",
-				// 		elapsed,		// round to nearest 10
-				// 		model->ir_data[word_idx],
-				// 		bit, bit_pos);
-
-				// 	#if IR_RECEIVER_DEBUGLOG > 1
-				// 		printf(" \t [%d]%ld, [%d]%ld", model->counterIdx, time_of_event, 
-				// 									prev_event_idx, prev_time_of_event);
-				// 	#endif
-
-				// 	printf("\n");
-				// 	// separator
-				// 	if (bit_pos % 8 == 0) printf("\n");
-				// #endif
+					// printf("%d 0x%04X %s - D%d",
+					// 	elapsed,		// round to nearest 10
+					// 	model->ir_data[word_idx],
+					// 	bit, bit_pos);
+					// 	printf(" \t [%d]%ld, [%d]%ld", model->counterIdx, time_of_event, 
+					// 								prev_event_idx, prev_time_of_event);
+					// printf("\n");
+					// // separator
+					// if (bit_pos % 8 == 0) printf("\n");
+				#endif
 
 				
 				//! enough data to collect
@@ -301,7 +297,7 @@ typedef struct {
 				//! IMPORTANTE: printf statements introduce delays
 				//! start pulses: 9ms HIGH, 4.5ms LOW
 				if (model->counterIdx == 2) {
-					if (model->pulse_buf[0] > 3000 || model->pulse_buf[1] > 3000) {
+					if (model->pulse_buf[0] > 2000 || model->pulse_buf[1] > 2000) {
 						model->ir_started = 2;	// start stage 2
 					} else {
 						model->ir_started = 0;	// restart

@@ -1,14 +1,14 @@
 //! OVERWRITE
-// #define IR_LOGICAL_HIGH_THRESHOLD 170
-// #define IR_OUTLINER_THRESHOLD 100
-
-#define IR_RECEIVER_PIN PD2
-
 #define IRRECEIVER_PULSE_THRESHOLD_US 450
+
+#define IR_LOGICAL_HIGH_THRESHOLD 150
+#define IR_OUTLINER_THRESHOLD 50
 
 #include "../../fun_modules/fun_irReceiver.h"
 
-#define IR_TEST_BUFF_LEN 184
+#define IR_RECEIVER_PIN PD2
+
+#define IR_TEST_BUFF_LEN 224
 u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
 u16 IRReceiver_testIdx = 0;
 
