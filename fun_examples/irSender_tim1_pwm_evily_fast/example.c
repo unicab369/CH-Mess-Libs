@@ -25,8 +25,8 @@ int main() {
 		if ((millis() - time_ref) > 12000) {
 			printf("***sending data\r\n");
 			// fun_irSender_sendAsync(0x00FF, 0xA56D);
-			fun_irSender_send(0x00F1, 0xA56D, 0x2222);
-			// fun_irSender_sendMessages();
+			// fun_irSender_send(0x00F1, 0xA56D, 0x2222);
+			fun_irSender_sendMessages();
 			time_ref = millis();
 		}
 

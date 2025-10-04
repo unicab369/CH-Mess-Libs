@@ -13,35 +13,17 @@ u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
 u16 IRReceiver_testIdx = 0;
 
 void on_handle_irReceiver(u16 *data, u16 len) {
-	// for (u16 i = 0; i < len; i++) {
-	// 	ir_data[len_count++] = data[i];
-	// }
-
-	// if (len_count > 30) {
-	// 	len_count = 0;
-	// 	printf("\nNEC: ");
-	// 	for (u16 i = 0; i < 100; i++) {
-	// 		if (ir_data[i] == 0) {
-	// 			break;
-	// 		}
-	// 		printf("0x%04X \n", ir_data[i]);
-	// 	}
-	// 	printf("\r\n");
-	// 	len_count = 0;
-	// }
-
 	if (len > 0) {
-		if (IRReceiver_testIdx < IR_TEST_BUFF_LEN) {
-			for (int i = 0; i < IRRECEIVER_BUFFER_SIZE; i += 1) {
-				RReceiver_testbuff[IRReceiver_testIdx] = data[i];
-				IRReceiver_testIdx++;
-			}
+		for (int i = 0; i < len; i += 1) {
+			RReceiver_testbuff[IRReceiver_testIdx] = data[i];
+			IRReceiver_testIdx++;
 		}
 	} else {
 		//# timeout
-		printf("\nbufIdx: %d\n", IRReceiver_testIdx);
 
 		if (IRReceiver_testIdx > 0) {
+			printf("bufIdx: %d\n", IRReceiver_testIdx);
+			
 			for (u16 i = 0; i < IR_TEST_BUFF_LEN; i++) {
 				printf("0x%04X  ", RReceiver_testbuff[i]);
 				if (i % 8 == 7) printf("\n");
