@@ -1,1 +1,1 @@
-240*2 bytes -> 0 us spacing
+200*2 bytes -> 0 us spacing

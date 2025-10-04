@@ -8,7 +8,7 @@
 
 #define IR_RECEIVER_PIN PD2
 
-#define IR_TEST_BUFF_LEN 240
+#define IR_TEST_BUFF_LEN 200
 u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
 u16 IRReceiver_testIdx = 0;
 
@@ -33,13 +33,6 @@ void on_handle_irReceiver(u16 *data, u16 len) {
 		}
 		IRReceiver_testIdx = 0;
 	}
-
-
-	// printf("\nNEC: ");
-	// for (u16 i = 0; i < len; i++) {
-	// 	printf("0x%04X ", data[i]);
-	// }
-	// printf("\r\n");
 }
 
 int main() {

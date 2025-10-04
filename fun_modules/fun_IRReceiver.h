@@ -22,11 +22,14 @@
 #include "fun_base.h"
 #include "fun_crc.h"
 
+
+//# Comment this line out to use the GPIO input ortherwise use the DMA input
+// #define IR_RECEIVER_USE_TIM1
+
+
 //# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
 #define IR_RECEIVER_DEBUGLOG 1
 
-//# Comment this line out to use the GPIO input ortherwise use the DMA input
-#define IR_RECEIVER_USE_TIM1
 
 #ifndef IR_LOGICAL_HIGH_THRESHOLD
 	#define IR_LOGICAL_HIGH_THRESHOLD 300
@@ -342,13 +345,14 @@ typedef struct {
 						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
 						if (bit) model->ir_data[word_idx] |= 1 << bit_pos;
 
-						#if IR_RECEIVER_DEBUGLOG == 1
-							const char *bitStr = bit ? "1" : ".";
-							printf("%d \t %s \t 0x%04X D%d\n",
-								model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
-							// separator
-							if (bit_pos % 8 == 0) printf("\n");
-						#endif
+						//! IMPORTANTE: printf statements introduce delays
+						// #if IR_RECEIVER_DEBUGLOG == 1
+						// 	const char *bitStr = bit ? "1" : ".";
+						// 	printf("%d \t %s \t 0x%04X D%d\n",
+						// 		model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
+						// 	// separator
+						// 	if (bit_pos % 8 == 0) printf("\n");
+						// #endif
 					}
 
 					//# STEP 4: handle completed packet

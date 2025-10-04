@@ -157,9 +157,10 @@ void fun_irSender_sendMessages() {
 	u16 data = 0x1111;
 
 	u32 ref = millis();
-	for (int i = 0; i < 240; i++) {
+	for (int i = 0; i < 200; i++) {
 		fun_irSend_NECData(data);
 		data++;
+		Delay_Us(5);
 	}
 	printf("messages in %d ms\r\n", millis() - ref);
 	printf("lasData: 0x%04X\r\n", data);

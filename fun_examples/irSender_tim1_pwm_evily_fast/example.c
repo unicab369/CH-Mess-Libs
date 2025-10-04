@@ -22,7 +22,7 @@ int main() {
 	// fun_irSender_send(0x00FF, 0xA56D);
 
 	while(1) {
-		if ((millis() - time_ref) > 12000) {
+		if ((millis() - time_ref) > 11000) {
 			printf("***sending data\r\n");
 			// fun_irSender_sendAsync(0x00FF, 0xA56D);
 			// fun_irSender_send(0x00F1, 0xA56D, 0x2222);
