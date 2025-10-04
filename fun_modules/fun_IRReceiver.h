@@ -26,7 +26,7 @@
 #define IR_RECEIVER_DEBUGLOG 0
 
 //# Comment this line out to use the GPIO input ortherwise use the DMA input
-#define IR_RECEIVER_USE_TIM1
+// #define IR_RECEIVER_USE_TIM1
 
 #ifndef IR_LOGICAL_HIGH_THRESHOLD
 	#define IR_LOGICAL_HIGH_THRESHOLD 300
@@ -41,7 +41,8 @@
 #define TIM1_BUFFER_LAST_IDX (IR_MAX_PULSES - 1)
 #define IR_DECODE_TIMEOUT_US 100000		// 100ms
 #define IRRECEIVER_BUFFER_SIZE 4
-#define IRRECEIVER_BUFFER_BITS_SIZE (IRRECEIVER_BUFFER_SIZE * 2 * 2)
+#define IRRECEIVER_BUFFER_BITS_COUNT (IRRECEIVER_BUFFER_SIZE * 2 * 8)
+
 typedef struct {
 	int pin;
 	int ir_started;
@@ -55,10 +56,6 @@ typedef struct {
 	u32 timeRef;
 	u16 pulse_buf[IR_MAX_PULSES];
 } IRReceiver_t;
-
-#define IR_TEST_BUFF_LEN 240
-u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
-u16 IRReceiver_testIdx = 0;
 
 #ifdef IR_RECEIVER_USE_TIM1
 	// TIM2_CH1 -> PD2 -> DMA1_CH2
@@ -120,7 +117,7 @@ u16 IRReceiver_testIdx = 0;
 	u16 outliner = 0;
 	
 	void fun_irReceiver_task(IRReceiver_t* model, void(*handler)(u16*, u8)) {
-			// Must perform modulus here, in case DMA_IN->CNTR == 0.
+		// Must perform modulus here, in case DMA_IN->CNTR == 0.
 		int head = (IR_MAX_PULSES - IR_DMA_IN->CNTR) & TIM1_BUFFER_LAST_IDX;
 
 		if( head != model->counterIdx ) {
@@ -172,26 +169,8 @@ u16 IRReceiver_testIdx = 0;
 				if (elapsed > IR_LOGICAL_HIGH_THRESHOLD) {
 					model->ir_data[word_idx] |= (1 << bit_pos);		// MSB first (reversed)
 				}
-
 				model->timeRef =  micros();
 				
-				//! enough data to collect
-				if (bit_pos == 0 && word_idx == 3) {
-					#if IR_RECEIVER_DEBUGLOG > 1
-						// printf("\nbits processed: %d\n", model->bits_processed);
-						u64 combined = combine_64(model->ir_data[0], model->ir_data[1],
-												model->ir_data[2], model->ir_data[3]);
-						u8 check = crc16_ccitt_check64(combined, &combined);
-						printf("check: %d\n", check);
-					#endif
-
-					//# STEP 4: Complete frame
-					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
-
-					model->ir_started = 0;
-					memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
-				}
-
 				//# Logging
 				#if IR_RECEIVER_DEBUGLOG > 0
 					const char *bit = elapsed > IR_LOGICAL_HIGH_THRESHOLD ? "1" : ".";
@@ -210,6 +189,24 @@ u16 IRReceiver_testIdx = 0;
 					// separator
 					if (bit_pos % 8 == 0) printf("\n");
 				#endif
+
+				//! enough data to collect
+				if (bit_pos == 0 && word_idx == 3) {
+					#if IR_RECEIVER_DEBUGLOG > 1
+						// printf("\nbits processed: %d\n", model->bits_processed);
+						u64 combined = combine_64(model->ir_data[0], model->ir_data[1],
+												model->ir_data[2], model->ir_data[3]);
+						u8 check = crc16_ccitt_check64(combined, &combined);
+						printf("check: %d\n", check);
+					#endif
+
+					//# STEP 4: Complete frame
+					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
+
+					//# clear out ir data
+					model->ir_started = 0;
+					memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
+				}
 			}
 
 			//# STEP 1: filter HIGH start frame. Expect > 1200 ticks
@@ -229,22 +226,8 @@ u16 IRReceiver_testIdx = 0;
 			(( micros() - model->timeRef) > IR_DECODE_TIMEOUT_US)
 		) {
 			printf("\nTimeout %d\n", micros() - model->timeRef);
-
-			// if (model->bits_processed > 0) {
-			// 	#if IR_RECEIVER_DEBUGLOG > 1
-			// 		// printf("\nbits processed: %d\n", model->bits_processed);
-			// 		u64 combined = combine_64(model->ir_data[0], model->ir_data[1],
-			// 								model->ir_data[2], model->ir_data[3]);
-			// 		u8 check = crc16_ccitt_check64(combined, &combined);
-			// 		printf("check: %d\n", check);
-			// 	#endif
-
-			// 	handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
-			// }
-
 			//# clear out ir data
 			model->ir_started = 0;
-			// model->timeRef =  micros();
 			memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
 		}
 	}
@@ -345,7 +328,7 @@ u16 IRReceiver_testIdx = 0;
 				model->prev_pinState = model->current_pinState;
 				
 				//! enough data to collect
-				if (model->counterIdx >= IRRECEIVER_BUFFER_SIZE*2*8) {
+				if (model->counterIdx >= IRRECEIVER_BUFFER_BITS_COUNT) {
 					_irReceiver_debugLog(model);
 
 					// even elements are low signals
@@ -368,14 +351,14 @@ u16 IRReceiver_testIdx = 0;
 					}
 
 					//# STEP 4: handle completed packet
-					// handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
+					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
 
-					if (IRReceiver_testIdx < IR_TEST_BUFF_LEN) {
-						for (int i = 0; i < IRRECEIVER_BUFFER_SIZE; i += 1) {
-							RReceiver_testbuff[IRReceiver_testIdx] = model->ir_data[i];
-							IRReceiver_testIdx++;
-						}
-					}
+					// if (IRReceiver_testIdx < IR_TEST_BUFF_LEN) {
+					// 	for (int i = 0; i < IRRECEIVER_BUFFER_SIZE; i += 1) {
+					// 		RReceiver_testbuff[IRReceiver_testIdx] = model->ir_data[i];
+					// 		IRReceiver_testIdx++;
+					// 	}
+					// }
 					
 					//! clear data
 					_irReceiver_clearData(model);
@@ -384,17 +367,19 @@ u16 IRReceiver_testIdx = 0;
 
 			//# STEP 5: handle outout - restart states
 			else if (micros() - model->timeRef > IR_DECODE_TIMEOUT_US) {
-				printf("\nbufIdx: %d\n", IRReceiver_testIdx);
+				handler(NULL, 0);
 
-				if (IRReceiver_testIdx > 0) {
-					for (u16 i = 0; i < IR_TEST_BUFF_LEN; i++) {
-						printf("0x%04X  ", RReceiver_testbuff[i]);
-						if (i % 8 == 7) printf("\n");
-						RReceiver_testbuff[i] = 0;
-					}
-					printf("----------\r\n");
-				}
-				IRReceiver_testIdx = 0;
+				// printf("\nbufIdx: %d\n", IRReceiver_testIdx);
+
+				// if (IRReceiver_testIdx > 0) {
+				// 	for (u16 i = 0; i < IR_TEST_BUFF_LEN; i++) {
+				// 		printf("0x%04X  ", RReceiver_testbuff[i]);
+				// 		if (i % 8 == 7) printf("\n");
+				// 		RReceiver_testbuff[i] = 0;
+				// 	}
+				// 	printf("----------\r\n");
+				// }
+				// IRReceiver_testIdx = 0;
 
 				// for (int i = 0; i < model->counterIdx; i += 1) {
 				// 	int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;

@@ -8,6 +8,10 @@
 
 #define IR_RECEIVER_PIN PD2
 
+#define IR_TEST_BUFF_LEN 240
+u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
+u16 IRReceiver_testIdx = 0;
+
 void on_handle_irReceiver(u16 *data, u16 len) {
 	// for (u16 i = 0; i < len; i++) {
 	// 	ir_data[len_count++] = data[i];
@@ -26,11 +30,34 @@ void on_handle_irReceiver(u16 *data, u16 len) {
 	// 	len_count = 0;
 	// }
 
-	printf("\nNEC: ");
-	for (u16 i = 0; i < len; i++) {
-		printf("0x%04X ", data[i]);
+	if (len > 0) {
+		if (IRReceiver_testIdx < IR_TEST_BUFF_LEN) {
+			for (int i = 0; i < IRRECEIVER_BUFFER_SIZE; i += 1) {
+				RReceiver_testbuff[IRReceiver_testIdx] = data[i];
+				IRReceiver_testIdx++;
+			}
+		}
+	} else {
+		//# timeout
+		printf("\nbufIdx: %d\n", IRReceiver_testIdx);
+
+		if (IRReceiver_testIdx > 0) {
+			for (u16 i = 0; i < IR_TEST_BUFF_LEN; i++) {
+				printf("0x%04X  ", RReceiver_testbuff[i]);
+				if (i % 8 == 7) printf("\n");
+				RReceiver_testbuff[i] = 0;
+			}
+			printf("----------\r\n");
+		}
+		IRReceiver_testIdx = 0;
 	}
-	printf("\r\n");
+
+
+	// printf("\nNEC: ");
+	// for (u16 i = 0; i < len; i++) {
+	// 	printf("0x%04X ", data[i]);
+	// }
+	// printf("\r\n");
 }
 
 int main() {
