@@ -158,10 +158,10 @@ void fun_irSender_sendMessages() {
 	u32 ref = millis();
 	u16 data = 0x0000;
 
-	for (int i = 0; i < 192; i++) {
+	for (int i = 0; i < 188; i++) {
 		fun_irSend_NECData(data);
 		data++;
-		Delay_Us(5);
+		// Delay_Us(5);
 	}
 
 	printf("messages in %d ms\r\n", millis() - ref);

@@ -4,11 +4,11 @@
 
 #define IR_RECEIVER_PIN PD2
 
-#define IRRECEIVER_PULSE_THRESHOLD_US 430
+#define IRRECEIVER_PULSE_THRESHOLD_US 450
 
 #include "../../fun_modules/fun_irReceiver.h"
 
-#define IR_TEST_BUFF_LEN 192
+#define IR_TEST_BUFF_LEN 184
 u16 RReceiver_testbuff[IR_TEST_BUFF_LEN];
 u16 IRReceiver_testIdx = 0;
 
