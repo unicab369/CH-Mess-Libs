@@ -29,9 +29,9 @@
 // #define IR_RECEIVER_USE_TIM1
 
 //! For generating the mask/modulus, this must be a power of 2 size.
-#define IRREMOTE_MAX_PULSES 128
-#define TIM1_BUFFER_LAST_IDX (IRREMOTE_MAX_PULSES - 1)
-#define IRRECEIVER_DECODE_TIMEOUT_US 100000		// 50ms
+#define IR_MAX_PULSES 128
+#define TIM1_BUFFER_LAST_IDX (IR_MAX_PULSES - 1)
+#define IR_DECODE_TIMEOUT_US 2000000		// 50ms
 #define IRRECEIVER_BUFFER_SIZE 4
 
 typedef struct {
@@ -45,7 +45,7 @@ typedef struct {
 	int16_t counterIdx;			// store pulses count (for gpio) Or tails (for DMA)
 	u32 bits_processed;			// number of bits processed
 	u32 timeRef;
-	u16 pulse_buf[IRREMOTE_MAX_PULSES];
+	u16 pulse_buf[IR_MAX_PULSES];
 } IRReceiver_t;
 
 
@@ -73,7 +73,7 @@ void _irReceiver_clearData(IRReceiver_t* model) {
 	//! ####################################
 
 	//! For generating the mask/modulus, this must be a power of 2 size.
-	uint16_t ir_ticks_buff[IRREMOTE_MAX_PULSES];
+	uint16_t ir_ticks_buff[IR_MAX_PULSES];
 
 	void fun_irReceiver_init(IRReceiver_t* model) {
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
@@ -97,7 +97,7 @@ void _irReceiver_clearData(IRReceiver_t* model) {
 			0					|				// NO Half-trigger
 			0					|				// NO Whole-trigger
 			DMA_CFGR1_EN;						// Enable
-		IR_DMA_IN->CNTR = IRREMOTE_MAX_PULSES;
+		IR_DMA_IN->CNTR = IR_MAX_PULSES;
 
 		TIM1->PSC = 0x00ff;		// set TIM1 clock prescaler divider (Massive prescaler)
 		TIM1->ATRLR = 65535;	// set PWM total cycle width
@@ -125,7 +125,7 @@ void _irReceiver_clearData(IRReceiver_t* model) {
 	
 	void fun_irReceiver_task(IRReceiver_t* model, void(*handler)(u16*, u8)) {
 			// Must perform modulus here, in case DMA_IN->CNTR == 0.
-		int head = (IRREMOTE_MAX_PULSES - IR_DMA_IN->CNTR) & TIM1_BUFFER_LAST_IDX;
+		int head = (IR_MAX_PULSES - IR_DMA_IN->CNTR) & TIM1_BUFFER_LAST_IDX;
 
 		if( head != model->counterIdx ) {
 			u32 time_of_event = ir_ticks_buff[model->counterIdx];
@@ -271,6 +271,10 @@ void _irReceiver_clearData(IRReceiver_t* model) {
 		#endif
 	}
 
+	#define MAX_BUFF_LEN 280
+	u16 buff[MAX_BUFF_LEN];
+	u16 buffIdx = 0;
+
 	//# Receive IR task
 	//! IMPORTANTE: printf statements introduce delays
 	void fun_irReceiver_task(IRReceiver_t* model, void (*handler)(u16*, u8)) {
@@ -348,15 +352,31 @@ void _irReceiver_clearData(IRReceiver_t* model) {
 					}
 
 					//# STEP 4: handle completed packet
-					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
+					// handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
 
+					if (buffIdx < MAX_BUFF_LEN) {
+						for (int i = 0; i < IRRECEIVER_BUFFER_SIZE; i += 1) {
+							buff[buffIdx] = model->ir_data[i];
+							buffIdx++;
+						}
+					}
+					
 					//! clear data
 					_irReceiver_clearData(model);
 				}
 			}
 
 			//# STEP 5: handle outout - restart states
-			else if (micros() - model->timeRef > IRRECEIVER_DECODE_TIMEOUT_US) {
+			else if (micros() - model->timeRef > IR_DECODE_TIMEOUT_US) {
+				printf("\nbufIdx: %d\n", buffIdx);
+				for (u16 i = 128; i < MAX_BUFF_LEN; i++) {
+					printf("0x%04X  ", buff[i]);
+					if (i % 8 == 7) printf("\n");
+					buff[i] = 0;
+				}
+				printf("----------\r\n");
+				buffIdx = 0;
+
 				// for (int i = 0; i < model->counterIdx; i += 1) {
 				// 	int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
 				// 	printf("%d %d\n", model->pulse_buf[i], bit);

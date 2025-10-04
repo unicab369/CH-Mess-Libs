@@ -18,14 +18,15 @@ int main() {
 	printf("Mode: %s\r\n", mode ? "PWM" : "Manual GPIO");
 	
 	u32 time_ref = millis();
+	fun_irSender_sendMessages();
 	// fun_irSender_send(0x00FF, 0xA56D);
 
 	while(1) {
-		if ((millis() - time_ref) > 3000) {
+		if ((millis() - time_ref) > 12000) {
 			printf("***sending data\r\n");
 			// fun_irSender_sendAsync(0x00FF, 0xA56D);
-			fun_irSender_send(0x00F1, 0xA56D, 0x2222);
-			// fun_irSender_sendMessages();
+			// fun_irSender_send(0x00F1, 0xA56D, 0x2222);
+			fun_irSender_sendMessages();
 			time_ref = millis();
 		}
 

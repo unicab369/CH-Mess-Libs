@@ -116,6 +116,8 @@ void _IR_carrier_pulse(u32 duration_us, u32 space_us) {
 }
 
 void fun_irSend_NECData(u16 data) {
+	// printf("sent: 0x%04X\n", data);
+
 	for (int i = 15; i >= 0; i--) {
 		u8 bit = (data >> i) & 1;		// MSB first
 		u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
@@ -152,20 +154,19 @@ void fun_irSender_send(u16 address, u16 command, u16 extra) {
 void fun_irSender_sendMessages() {
 	_IR_carrier_pulse(9000, 4500);
 
-	u16 data = 0x0000;
+	u16 data = 0x1111;
 
-	for (int i = 0; i < 50; i++) {
+	u32 ref = millis();
+	for (int i = 0; i < 280; i++) {
 		fun_irSend_NECData(data);
 		data++;
-		printf("sent: 0x%04X\n", data);
 	}
-	printf("\n");
-
-	// Stop bit
-	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, 1000);
+	printf("messages in %d ms\r\n", millis() - ref);
+	printf("lasData: 0x%04X\r\n", data);
+	// printf("\n");
 }
 
-	//! ####################################
+//! ####################################
 //! ASYNC TRANSMIT FUNCTIONS
 //! ####################################
 
