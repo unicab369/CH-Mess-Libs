@@ -1,6 +1,6 @@
 //! OVERWRITE
-#define NEC_LOGIC_1_WIDTH_US 420
-#define NEC_LOGIC_0_WIDTH_US 270
+#define NEC_LOGIC_1_WIDTH_US 460
+#define NEC_LOGIC_0_WIDTH_US 280
 
 #include "../../fun_modules/fun_irSender.h"
 
