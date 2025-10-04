@@ -157,7 +157,7 @@ void fun_irSender_sendMessages() {
 	u16 data = 0x1111;
 
 	u32 ref = millis();
-	for (int i = 0; i < 280; i++) {
+	for (int i = 0; i < 240; i++) {
 		fun_irSend_NECData(data);
 		data++;
 	}
