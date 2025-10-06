@@ -1,6 +1,6 @@
 //! OVERWRITE
-#define NEC_LOGIC_1_WIDTH_US 480
-#define NEC_LOGIC_0_WIDTH_US 280
+#define NEC_LOGIC_1_WIDTH_US 420
+#define NEC_LOGIC_0_WIDTH_US 210
 
 #include "../../fun_modules/fun_irSender.h"
 
@@ -22,7 +22,7 @@ int main() {
 	// fun_irSender_send(0x00FF, 0xA56D);
 
 	while(1) {
-		if ((millis() - time_ref) > 7000) {
+		if ((millis() - time_ref) > 3000) {
 			printf("***sending data\r\n");
 			// fun_irSender_sendAsync(0x00FF, 0xA56D);
 			// fun_irSender_send(0x00F1, 0xA56D, 0x2222);

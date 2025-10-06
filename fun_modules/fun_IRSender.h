@@ -115,15 +115,53 @@ void _IR_carrier_pulse(u32 duration_us, u32 space_us) {
 	Delay_Us(space_us);
 }
 
-void fun_irSend_NECData(u16 data) {
-	// printf("sent: 0x%04X\n", data);
+u8 state = 0;
 
-	for (int i = 15; i >= 0; i--) {
-		u8 bit = (data >> i) & 1;		// MSB first
-		u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
-		_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, space);
-	}
+void fun_irSend_NECData2(u16 data) {
+	// PWM_ON();
+	// Delay_Us(NEC_LOGIC_0_WIDTH_US);
+	// PWM_OFF();
+	// Delay_Us(NEC_LOGIC_0_WIDTH_US);
+
+	// PWM_ON();
+	// Delay_Us(NEC_LOGIC_1_WIDTH_US);
+	// PWM_OFF();
+	// Delay_Us(NEC_LOGIC_1_WIDTH_US);
+
+
+    for (int i = 15; i >= 0; i--)  {
+        u8 bit = (data >> i) & 1;        // MSB first
+        u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
+
+        if (state == 0) {
+            PWM_ON();
+
+        } else {
+            PWM_OFF();
+        }
+        Delay_Us(space);
+        state = !state;
+    }
 }
+
+// void fun_irSend_NECData(u16 data) {
+// 	// printf("sent: 0x%04X\n", data);
+
+// 	for (int i = 15; i >= 0; i--) {
+// 		u8 bit = (data >> i) & 1;		// MSB first
+// 		u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
+// 		// _IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, space);
+
+// 		if (state) {
+// 			PWM_ON();
+// 		} else {
+// 			PWM_OFF();
+// 		}
+
+// 		state =! state;
+// 		Delay_Us(space);
+// 	}
+// }
 
 void fun_irSender_sendMessages() {
 	// u64 combined = combine_64(address, command, extra, 0x00);
@@ -140,16 +178,24 @@ void fun_irSender_sendMessages() {
 	// 		(uint32_t)(combined2 & 0xFFFFFFFF));
 	// #endif
 
+	u32 ref = millis();
+
 	_IR_carrier_pulse(9000, 4500);
 
-	u32 ref = millis();
-	u16 data = 0x0000;
+	fun_irSend_NECData2(0x0000);
+	fun_irSend_NECData2(0xFFFF);
 
-	for (int i = 0; i < 224; i++) {
-		fun_irSend_NECData(data);
-		data++;
-		// Delay_Us(5);
-	}
+	PWM_ON();
+	Delay_Us(1000);
+	PWM_OFF();
+
+	// u16 data = 0x0000;
+
+	// for (int i = 0; i < 4; i++) {
+	// 	fun_irSend_NECData(data);
+	// 	data++;
+	// 	// Delay_Us(5);
+	// }
 
 	printf("messages in %d ms\r\n", millis() - ref);
 	// printf("\n");
