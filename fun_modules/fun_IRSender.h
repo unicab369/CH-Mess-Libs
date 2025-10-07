@@ -187,7 +187,7 @@ void fun_irSender_sendMessages() {
 
 	u16 data = 0x0000;
 
-	for (int i = 0; i < 200; i++) {
+	for (int i = 0; i < 150; i++) {
 		fun_irSend_NECData2(data);
 		data++;
 		// Delay_Us(5);

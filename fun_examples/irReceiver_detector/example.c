@@ -49,6 +49,10 @@ IRAnalyzer_t IRAnalyzer = {
 #define MAX_WORDS 400
 u16 word_buf[MAX_WORDS] = {0};
 volatile u16 word_idx = 0;
+u32 cycle_time_max = 0;
+u16 cycle_time_min = 0xFFFF;
+u32 cycle_count = 0;
+u32 cycle_count2 = 0;
 
 void _irReceiver_processBuffer() {
 	if (word_idx > 0) {
@@ -85,10 +89,11 @@ void _irReceiver_processBuffer() {
 void fun_irReceiver_task2(IRReceiver_t* model, void (*handler)(u16*, u8)) {
     if (model->pin == -1) return;
     model->current_pinState = funDigitalRead(model->pin);
+	u32 now = micros();
 
     if (model->current_pinState != model->prev_pinState) {
 		//! get time difference
-		u16 elapsed = ROUND_TO_NEAREST_10(micros() - IRAnalyzer.timeRef);
+		u16 elapsed = now - IRAnalyzer.timeRef;
 
 		if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
 			//! collect data
@@ -130,11 +135,17 @@ void fun_irReceiver_task2(IRReceiver_t* model, void (*handler)(u16*, u8)) {
     }
 
 	//! timeout
-    if ((micros() - IRAnalyzer.timeoutRef) > 200000) {
+    if ((micros() - IRAnalyzer.timeoutRef) > 500000) {
         IRAnalyzer.timeoutRef = micros();
 
 		_irReceiver_processBuffer();
 
+		printf("\ncycle max: %d us, min: %d us, count: %d, count2: %d\n", 
+			cycle_time_max, cycle_time_min, cycle_count, cycle_count2);
+		cycle_time_max = 0;
+		cycle_time_min = 0xFFFF;
+		cycle_count = 0;
+		cycle_count2 = 0;
 
 		// if (IRAnalyzer.buf_idx > 0) {
 		// 	printf("\n\nState counts: %d\n", IRAnalyzer.buf_idx);
@@ -206,6 +217,22 @@ void fun_irReceiver_task2(IRReceiver_t* model, void (*handler)(u16*, u8)) {
     }
 
     model->prev_pinState = model->current_pinState;
+
+	u32 elapsed2 = micros() - now;
+	
+	if (elapsed2 > cycle_time_max) {
+		cycle_time_max = elapsed2;
+	}
+
+	if (elapsed2 < cycle_time_min) {
+		cycle_time_min = elapsed2;
+	}
+
+	if (elapsed2 < 50) {
+		cycle_count2++;
+	}
+
+	cycle_count++;
 }
 
 
