@@ -182,23 +182,21 @@ void fun_irSender_sendMessages() {
 
 	_IR_carrier_pulse(9000, 4500);
 
-	fun_irSend_NECData2(0x0000);
-	fun_irSend_NECData2(0xFFFF);
+	// fun_irSend_NECData2(0x0000);
+	// fun_irSend_NECData2(0xFFFF);
 
-	PWM_ON();
-	Delay_Us(1000);
-	PWM_OFF();
+	u16 data = 0x0000;
 
-	// u16 data = 0x0000;
+	for (int i = 0; i < 4; i++) {
+		fun_irSend_NECData2(data);
+		data++;
+		// Delay_Us(5);
+	}
 
-	// for (int i = 0; i < 4; i++) {
-	// 	fun_irSend_NECData(data);
-	// 	data++;
-	// 	// Delay_Us(5);
-	// }
+	// terminating signals
+	PWM_ON(); Delay_Us(1000); PWM_OFF();
 
 	printf("messages in %d ms\r\n", millis() - ref);
-	// printf("\n");
 }
 
 //! ####################################
