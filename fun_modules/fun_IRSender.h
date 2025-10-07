@@ -180,14 +180,14 @@ void fun_irSender_sendMessages() {
 
 	u32 ref = millis();
 
-	_IR_carrier_pulse(9000, 4500);
+	_IR_carrier_pulse(2000, 2000);
 
-	// fun_irSend_NECData2(0x0000);
 	// fun_irSend_NECData2(0xFFFF);
+	// fun_irSend_NECData2(0xFFF1);
 
 	u16 data = 0x0000;
 
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 200; i++) {
 		fun_irSend_NECData2(data);
 		data++;
 		// Delay_Us(5);
