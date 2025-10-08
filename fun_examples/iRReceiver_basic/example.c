@@ -25,7 +25,7 @@ void _irReceiver_processBuffer(IRReceiver_t* model) {
 	//! check for valid length
 	if (receive_buf_idx > 0) {
 		printf("\n\nState changes count: %d\n", receive_buf_idx);
-		fun_minMax32_flush(&minMax);
+		UTIL_minMax_flush(&minMax);
 		fun_thresholdBuffer_flush(&thresholdBuf);
 
 		//! print the header
@@ -43,7 +43,7 @@ void _irReceiver_processBuffer(IRReceiver_t* model) {
 
 			// find how close the value is to it's 
 			const char *bitStr = bit ? "1" : ".";
-			const char *maxStr = fun_minMax32_getStr(&minMax, value);
+			const char *maxStr = UTIL_minMax_getStr(&minMax, value);
 
 			//! print out the values
 			printf("%5s %3d | %7d | %3s | %7d | %7d | %7d \n",
@@ -68,7 +68,7 @@ void _irReceiver_processBuffer(IRReceiver_t* model) {
 	model->prev_pinState = model->current_pinState;
 
 	//! Reset values
-	fun_minMax32_clear(&minMax);
+	UTIL_minMax_clear(&minMax);
 	memset(receive_buf, 0, sizeof(receive_buf));
 	receive_buf_idx = 0;
 	fun_thresholdBuffer_clear(&thresholdBuf);
@@ -91,9 +91,9 @@ void _irReceiver_task(IRReceiver_t* model) {
 		//# STEP 1: Filter out high thresholds
 		if (!addHighThreshold) {
 			if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
-				fun_minMax32_updateMax(&minMax, elapsed);
+				UTIL_minMax_updateMax(&minMax, elapsed);
 			}
-			fun_minMax32_updateMin(&minMax, elapsed);
+			UTIL_minMax_updateMin(&minMax, elapsed);
 
 			//# STEP 2: collect data
 			receive_buf[receive_buf_idx] = elapsed;
@@ -117,19 +117,19 @@ void _irReceiver_task(IRReceiver_t* model) {
     if ((micros() - timeout_ref) > 500000) {
         timeout_ref = micros();
 
-		//# flush the buffer
+		//! process the buffer
 		_irReceiver_processBuffer(&model);
-		fun_cycleInfo_flush(&cycle);
+		UTIL_cycleInfo_flush(&cycle);
 
 		//! Reset values
-		fun_minMax32_clear(&minMax);
+		UTIL_minMax_clear(&minMax);
 		memset(receive_buf, 0, sizeof(receive_buf));
 		receive_buf_idx = 0;
 		fun_thresholdBuffer_clear(&thresholdBuf);
     }
 
     model->prev_pinState = model->current_pinState;
-	fun_cycleInfo_updateWithLimit(&cycle, micros() - moment, 50);
+	UTIL_cycleInfo_updateWithLimit(&cycle, micros() - moment, 50);
 }
 
 
@@ -146,7 +146,7 @@ int main() {
 	};
 
 	fun_irReceiver_init(&receiver);
-	fun_cycleInfo_clear(&cycle);
+	UTIL_cycleInfo_clear(&cycle);
 
 	while(1) {
 		_irReceiver_task(&receiver);

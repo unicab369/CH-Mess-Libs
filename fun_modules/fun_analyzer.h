@@ -10,27 +10,27 @@ typedef struct {
     u16 time_min;
 } Cycle_Info_t;
 
-void fun_cycleInfo_clear(Cycle_Info_t *info) {
+void UTIL_cycleInfo_clear(Cycle_Info_t *info) {
     info->count = 0;
     info->limit_counter = 0;
     info->time_max = 0;
     info->time_min = 0xFFFF;
 }
 
-void fun_cycleInfo_flush(Cycle_Info_t *info) {
+void UTIL_cycleInfo_flush(Cycle_Info_t *info) {
     printf("\nCycle count: %d, max/min: %d/%d us, lim_counter: %d\n",
             info->count, info->time_max, info->time_min, info->limit_counter);
-    fun_cycleInfo_clear(info);
+    UTIL_cycleInfo_clear(info);
 }
 
-void fun_cycleInfo_update(Cycle_Info_t *info, u32 elapsed) {
+void UTIL_cycleInfo_update(Cycle_Info_t *info, u32 elapsed) {
     info->count++;
     if (elapsed > info->time_max) info->time_max = elapsed;
     if (elapsed < info->time_min) info->time_min = elapsed;
 }
 
-void fun_cycleInfo_updateWithLimit(Cycle_Info_t *info, u32 elapsed, u32 limit) {
-    fun_cycleInfo_update(info, elapsed);
+void UTIL_cycleInfo_updateWithLimit(Cycle_Info_t *info, u32 elapsed, u32 limit) {
+    UTIL_cycleInfo_update(info, elapsed);
     if (elapsed < limit) info->limit_counter++;
 }
 
@@ -42,25 +42,25 @@ typedef struct {
 	u32 min;
 } MinMax_Info32_t;
 
-void fun_minMax32_clear(MinMax_Info32_t *info) {
+void UTIL_minMax_clear(MinMax_Info32_t *info) {
     info->max = 0;
     info->min = 0xFFFFFFFF;
 }
 
-void fun_minMax32_flush(MinMax_Info32_t *info) {
+void UTIL_minMax_flush(MinMax_Info32_t *info) {
     printf("MinMax Max: %d, Min: %d\n", info->max, info->min);
     fun_minMax32_clear(info);
 }
 
-void fun_minMax32_updateMin(MinMax_Info32_t *info, u32 value) {
+void UTIL_minMax_updateMin(MinMax_Info32_t *info, u32 value) {
     if (value < info->min) info->min = value;
 }
 
-void fun_minMax32_updateMax(MinMax_Info32_t *info, u32 value) {
+void UTIL_minMax_updateMax(MinMax_Info32_t *info, u32 value) {
     if (value > info->max) info->max = value;
 }
 
-const char* fun_minMax32_getStr(MinMax_Info32_t *info, u32 value) {
+const char* UTIL_minMax_getStr(MinMax_Info32_t *info, u32 value) {
     return (value == info->max) ? "(max)" :
             (value == info->min) ? "(min)" : "";
 }

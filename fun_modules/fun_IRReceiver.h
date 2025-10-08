@@ -238,150 +238,120 @@ typedef struct {
 
 #else
 
+	// uncomment to show cycle log
+	// #define IR_RECEIVER_CYCLE_LOG
+
+
+	// #define IR_RECEIVER_HIGH_THRESHOLD 2000
+	// #define IR_SENDER_LOGICAL_1_US 1600
+	// #define IR_SENDER_LOGICAL_0_US 560
+
+	#define IR_RECEIVER_HIGH_THRESHOLD 800
+	#define IR_SENDER_LOGICAL_1_US 550
+	#define IR_SENDER_LOGICAL_0_US 300
 
 	//! ####################################
 	//! RECEIVE FUNCTIONS USING GPIO
 	//! ####################################
 
-	// low state: average 500us-600us
-	// high state: average 1500us-1700us
-	// estimated threshold: greater than 1000 for high state
-	#ifndef IRRECEIVER_PULSE_THRESHOLD_US
-		#define IRRECEIVER_PULSE_THRESHOLD_US 1000
-	#endif
+	#define MAX_WORDS 200
+	u16 word_buf[MAX_WORDS] = {0};
+	u16 word_idx = 0;
 
-	void fun_irReceiver_init(IRReceiver_t* model) {
+	typedef struct {
+		u8 pin;
+		u16 BIT_BUFFER[16];
+		u16 bit_buf_idx;
+		u32 time_ref, timeout_ref;
+		u8 prev_state, current_state;
+	} IR_Receiver_t;
+
+	Cycle_Info_t ir_cycle;
+
+
+	//* INIT FUNCTION
+	void fun_irReceiver_init(IR_Receiver_t* model) {
 		printf("IRReceiver init\n");
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 		funDigitalWrite(model->pin, 1);
 
 		//! restart states
-		model->ir_started = 0;
-		model->current_pinState = 0;
-		model->prev_pinState = 0;
+		model->bit_buf_idx = 0,
+		model->prev_state = 0,
+		model->current_state = 0,
+		UTIL_cycleInfo_clear(&ir_cycle);		// clear cycle
 	}
 
-	void _irReceiver_clearData(IRReceiver_t* model) {
-		model->bits_processed = 0;
-		model->counterIdx = 0;
-		memset(model->ir_data, 0, IRRECEIVER_BUFFER_SIZE * sizeof(model->ir_data[0]));
+	//* PROCESS BUFFER FUNCTION
+	void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u16*, u16)) {
+		//! make callback
+		if (word_idx > 0) handler(word_buf, word_idx);
+		model->prev_state = model->current_state;
+
+		//! Reset values
+		memset(model->BIT_BUFFER, 0, sizeof(model->BIT_BUFFER));
+		model->bit_buf_idx = 0;
+		memset(word_buf, 0, sizeof(word_buf));
+		word_idx = 0;
 	}
 
-	//# Receive IR task
-	//! IMPORTANTE: printf statements introduce delays
-	void fun_irReceiver_task(IRReceiver_t* model, void (*handler)(u16*, u8)) {
+	//* TASK FUNCTION
+	void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 		if (model->pin == -1) return;
-		model->current_pinState = funDigitalRead(model->pin);
+		model->current_state = funDigitalRead(model->pin);
+		u32 moment = micros();
 
-		//# STEP 1: wait for first pulse
-		if (!model->ir_started && !model->current_pinState) {
-			model->ir_started = 1;
+		//! check for state change
+		if (model->current_state != model->prev_state) {
+			u16 elapsed = moment - model->time_ref;
 
-			//! clear pulses count
-			model->counterIdx = 0;
-			model->timeRef = micros();
-			model->prev_pinState = model->current_pinState;
-		}
+			//# STEP 1: Filter out high thresholds
+			if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
+				//! prevent overflow
+				if (word_idx >= MAX_WORDS) {
+					printf("max words: %d\n", word_idx);
 
-		//# STEP 2: detecting first pulses
-		else if (model->ir_started == 1) {
-			if (model->current_pinState != model->prev_pinState) {
-				//! State changed - record duration
-				model->pulse_buf[model->counterIdx] = micros() - model->timeRef;
-
-				//! update pulses count
-				model->counterIdx++;
-				model->timeRef = micros();
-				model->prev_pinState = model->current_pinState;
-
-				//! IMPORTANTE: printf statements introduce delays
-				//! start pulses: 9ms HIGH, 4.5ms LOW
-				if (model->counterIdx == 2) {
-					if (model->pulse_buf[0] > 2000 || model->pulse_buf[1] > 2000) {
-						model->ir_started = 2;	// start stage 2
-					} else {
-						model->ir_started = 0;	// restart
-					}
-
-					//! clear data
-					_irReceiver_clearData(model);
+					//# STEP 3: Process Buffer when it's full
+					_irReceiver_processBuffer(model, handler);
+					return;
 				}
-			}
-		}
 
-		//# STEP 3: handling data pulses
-		else if (model->ir_started == 2) {
-			if (model->current_pinState != model->prev_pinState) {
-				//! State changed - record duration
-				if (!model->current_pinState) {
-					model->pulse_buf[model->counterIdx] = micros() - model->timeRef;
-					model->counterIdx++;
-				}
-				
-				model->timeRef = micros();
-				model->prev_pinState = model->current_pinState;
-				
-				//! enough data to collect
-				if (model->counterIdx >= IRRECEIVER_BUFFER_BITS_COUNT) {
-					//# Logs
-					#if IR_RECEIVER_DEBUGLOG > 1
-						for (int i = 0; i < model->counterIdx; i += 1) {
-							int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
-							printf("%d %d\n", model->pulse_buf[i], bit);
-						}
-					#endif
+				//# STEP 2: collect data
+				model->BIT_BUFFER[model->bit_buf_idx] = elapsed;
 
-					// even elements are low signals
-					for (int i = 0; i < model->counterIdx; i += 1) {
-						int word_idx = model->bits_processed >> 4;     		// >>4 is /16
-						int bit_pos = 15 - (model->bits_processed & 0x0F);  // &0x0F is %16
-						model->bits_processed++;
+				// handle bit shifting
+				u16 delta_1 = abs(IR_SENDER_LOGICAL_1_US - elapsed);
+				u16 delta_0 = abs(IR_SENDER_LOGICAL_0_US - elapsed);
+				int bit = delta_1 < delta_0;
 
-						// printf("puslse buf: %d\n", model->pulse_buf[i]);
+				u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F); 	// &0x0F is %16
+				if (bit) word_buf[word_idx] |= 1 << bit_pos;		// MSB first (reversed)
 
-						//! collect the data - MSB first (reversed)
-						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
-						if (bit) model->ir_data[word_idx] |= 1 << bit_pos;
-
-						//! IMPORTANTE: printf statements introduce delays
-						// #if IR_RECEIVER_DEBUGLOG == 1
-						// 	const char *bitStr = bit ? "1" : ".";
-						// 	printf("%d \t %s \t 0x%04X D%d\n",
-						// 		model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
-						// 	// separator
-						// 	if (bit_pos % 8 == 0) printf("\n");
-						// #endif
-					}
-
-					//# STEP 4: handle completed packet
-					handler(model->ir_data, IRRECEIVER_BUFFER_SIZE);
-
-					//! clear data
-					_irReceiver_clearData(model);
+				if (bit_pos == 0) {
+					word_idx++;					// next word
+					model->bit_buf_idx = 0;		// reset the buffer
+				} else {
+					model->bit_buf_idx++;		// next bit
 				}
 			}
 
-			//# STEP 5: handle outout - restart states
-			else if (micros() - model->timeRef > IR_DECODE_TIMEOUT_US) {
-				handler(NULL, 0);
-
-				#if IR_RECEIVER_DEBUGLOG > 2
-					for (int i = 0; i < model->counterIdx; i += 1) {
-						int bit =  model->pulse_buf[i] > IRRECEIVER_PULSE_THRESHOLD_US;
-						printf("%d %d\n", model->pulse_buf[i], bit);
-					}
-					printf("\n");
-				#endif
-
-				//! restart states
-				model->ir_started = 0;
-				model->current_pinState = 0;
-				model->prev_pinState = 0;
-
-				//! clear data
-				_irReceiver_clearData(model);
-			}	
+			model->time_ref = micros();
+			model->timeout_ref = micros();
 		}
+
+		//# STEP 4: Timeout handler
+		if ((micros() - model->timeout_ref) > 500000) {
+			model->timeout_ref = micros();
+
+			//! process the buffer
+			_irReceiver_processBuffer(model, handler);
+
+			#ifdef IR_RECEIVER_CYCLE_LOG
+				UTIL_cycleInfo_flush(&ir_cycle);		// flush cycle
+			#endif
+		}
+
+		model->prev_state = model->current_state;
+		UTIL_cycleInfo_updateWithLimit(&ir_cycle, micros() - moment, 50);
 	}
-
 #endif
