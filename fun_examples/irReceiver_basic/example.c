@@ -1,4 +1,4 @@
-#define IR_RECEIVER_FAST_MODE
+// #define IR_RECEIVER_FAST_MODE
 
 #include "../../fun_modules/fun_irReceiver.h"
 

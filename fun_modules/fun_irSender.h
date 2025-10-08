@@ -26,7 +26,11 @@
 
 // #define IR_SENDER_DEBUGLOG 0
 
-#define IR_USE_TIM1_PWM
+#define NEC_LOGIC_1_WIDTH_US 1500
+#define NEC_LOGIC_0_WIDTH_US 560
+
+// #define IR_USE_TIM1_PWM
+
 
 // Enable/disable PWM carrier
 static inline void PWM_ON(void)  { TIM1->CCER |=  TIM_CC1NE; }
@@ -66,20 +70,10 @@ u8 fun_irSender_init(u8 pin) {
 		TIM1->CCER |= TIM_CC1NP;
 		return 1;
 	#else
-		funPinMode(irSender_pin, GPIO_CFGLR_OUT_10Mhz_PP);
+		funPinMode(irSender_pin, GPIO_CFGLR_OUT_50Mhz_PP);
 		return 0;
 	#endif
 }
-
-
-#ifndef NEC_LOGIC_1_WIDTH_US
-	#define NEC_LOGIC_1_WIDTH_US 1680
-#endif
-
-#ifndef NEC_LOGIC_0_WIDTH_US
-	#define NEC_LOGIC_0_WIDTH_US 560
-#endif
-
 
 //! ####################################
 //! TRANSMIT FUNCTIONS
@@ -91,7 +85,7 @@ u8 fun_irSender_init(u8 pin) {
 #define IR_CARRIER_HALF_PERIOD_US 13
 #define IR_CARRIER_CYCLES(duration_us) duration_us / (IR_CARRIER_HALF_PERIOD_US * 2)
 
-void _IR_carrier_pulse(u32 duration_us, u32 space_us) {
+void _IR_carrier_pulse(u32 duration_us) {
 	// the pulse has duration the same as NEC_LOGIC_0_WIDTH_US
 	#ifdef IR_USE_TIM1_PWM
 		//# Start CH1N output
@@ -111,46 +105,59 @@ void _IR_carrier_pulse(u32 duration_us, u32 space_us) {
 		// Ensure pin is low during space
 		funDigitalWrite(irSender_pin, 0);
 	#endif
-	
-	Delay_Us(space_us);
 }
 
-u8 state = 0;
+void fun_irSender_sendNEC_blocking(u16* data, u8 len) {
+	_IR_carrier_pulse(3000);
+	Delay_Us(3000);
 
-void fun_irSend_CustomData(u16 data) {
-    for (int i = 15; i >= 0; i--)  {
-        u8 bit = (data >> i) & 1;        // MSB first
-        u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
+	// loop through the data
+	for (int k = 0; k < len; k++) {
+		// loop through the bits
+		for (int i = 15; i >= 0; i--) {
+			u8 bit = (data[k] >> i) & 1;		// MSB first
+			u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
+			
+			_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
+			Delay_Us(space);
+		}
+	}
 
-        if (state == 0) {
-            PWM_ON();
-
-        } else {
-            PWM_OFF();
-        }
-        Delay_Us(space);
-        state = !state;
-    }
+	// terminating signals
+	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
+	Delay_Us(NEC_LOGIC_0_WIDTH_US);
 }
 
-void fun_irSend_NECData(u16 data) {
-	// printf("sent: 0x%04X\n", data);
+void fun_irSend_CustomTestData() {
+	static u8 state = 0;
+	_IR_carrier_pulse(3000);
+	Delay_Us(3000);
 
-	for (int i = 15; i >= 0; i--) {
-		u8 bit = (data >> i) & 1;		// MSB first
-		u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
-		// _IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, space);
+	u16 data = 0x0000;
 
-		if (state) {
-			PWM_ON();
-		} else {
-			PWM_OFF();
+	for (int i = 0; i < 150; i++) {
+		for (int i = 15; i >= 0; i--)  {
+			u8 bit = (data >> i) & 1;        // MSB first
+			u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
+
+			if (state == 0) {
+				PWM_ON();
+
+			} else {
+				PWM_OFF();
+			}
+			Delay_Us(space);
+			state = !state;
 		}
 
-		state =! state;
-		Delay_Us(space);
+		data++;
 	}
+
+	// terminating signals
+	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
+	Delay_Us(NEC_LOGIC_0_WIDTH_US);
 }
+
 
 
 //! ####################################

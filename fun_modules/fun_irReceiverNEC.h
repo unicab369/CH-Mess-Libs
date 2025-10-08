@@ -170,7 +170,7 @@ typedef struct {
 	// high state: average 1500us-1700us
 	// estimated threshold: greater than 1000 for high state
 	#define IR_NEC_LOGICAL_1_THRESHOLD_US 1000
-    #define IR_NEC_START_PULSE_THRESHOLD_US 3000
+    #define IR_NEC_START_PULSE_THRESHOLD_US 2000
 
     //* INIT FUNCTION
 	void fun_irReceiver_NEC_init(IR_ReceiverNEC_t* model) {
