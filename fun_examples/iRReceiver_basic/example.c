@@ -1,4 +1,3 @@
- //! OVERWRITE
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
