@@ -10,7 +10,7 @@
 #define IR_SENDER_LOGICAL_1_US 550
 #define IR_SENDER_LOGICAL_0_US 300
 
-#define IR_MAX_PULSES2 400
+#define IR_RECEIVER_PULSES_LEN 400
 
 Threshold_Buffer_t thresholdBuf = {
 	.buf_len = 5,
@@ -18,10 +18,10 @@ Threshold_Buffer_t thresholdBuf = {
 };
 
 MinMax_Info32_t minMax = {0};
-u16 receive_buf[IR_MAX_PULSES2];
+u16 receive_buf[IR_RECEIVER_PULSES_LEN];
 u16 receive_buf_idx;
 
-void _irReceiver_processBuffer(IRReceiver_t* model) {
+void _irReceiver_processBuffer2(IR_Receiver_t *model) {
 	//! check for valid length
 	if (receive_buf_idx > 0) {
 		printf("\n\nState changes count: %d\n", receive_buf_idx);
@@ -65,7 +65,7 @@ void _irReceiver_processBuffer(IRReceiver_t* model) {
 		printf("\r\n");
 	}
 
-	model->prev_pinState = model->current_pinState;
+	model->prev_state = model->current_state;
 
 	//! Reset values
 	UTIL_minMax_clear(&minMax);
@@ -76,15 +76,15 @@ void _irReceiver_processBuffer(IRReceiver_t* model) {
 
 Cycle_Info_t cycle;
 
-void _irReceiver_task(IRReceiver_t* model) {
+void _irReceiver_task(IR_Receiver_t *model) {
 	static u32 time_ref, timeout_ref;
 
     if (model->pin == -1) return;
-    model->current_pinState = funDigitalRead(model->pin);
+    model->current_state = funDigitalRead(model->pin);
 	u32 moment = micros();
 
 	//! check for state change
-    if (model->current_pinState != model->prev_pinState) {
+    if (model->current_state != model->prev_state) {
 		u16 elapsed = moment - time_ref;
 		u8 addHighThreshold = fun_thresholdBuffer_addUpperValue(&thresholdBuf, elapsed);
 
@@ -100,11 +100,11 @@ void _irReceiver_task(IRReceiver_t* model) {
 			receive_buf_idx++;
 
 			//! prevent overflow
-			if (receive_buf_idx >= IR_MAX_PULSES2) {
+			if (receive_buf_idx >= IR_RECEIVER_PULSES_LEN) {
 				printf("Max pulses reached: %d\n", receive_buf_idx);
 
 				//# STEP 3: Process Buffer when it's full
-				_irReceiver_processBuffer(&model);
+				_irReceiver_processBuffer2(&model);
 				return;
 			}
 		}
@@ -118,17 +118,11 @@ void _irReceiver_task(IRReceiver_t* model) {
         timeout_ref = micros();
 
 		//! process the buffer
-		_irReceiver_processBuffer(&model);
+		_irReceiver_processBuffer2(&model);
 		UTIL_cycleInfo_flush(&cycle);
-
-		//! Reset values
-		UTIL_minMax_clear(&minMax);
-		memset(receive_buf, 0, sizeof(receive_buf));
-		receive_buf_idx = 0;
-		fun_thresholdBuffer_clear(&thresholdBuf);
     }
 
-    model->prev_pinState = model->current_pinState;
+    model->prev_state = model->current_state;
 	UTIL_cycleInfo_updateWithLimit(&cycle, micros() - moment, 50);
 }
 
@@ -141,7 +135,7 @@ int main() {
 	Delay_Ms(100);
 	funGpioInitAll();
 
-	IRReceiver_t receiver = {
+	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
 	};
 

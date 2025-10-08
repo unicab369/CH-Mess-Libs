@@ -49,7 +49,7 @@ void UTIL_minMax_clear(MinMax_Info32_t *info) {
 
 void UTIL_minMax_flush(MinMax_Info32_t *info) {
     printf("MinMax Max: %d, Min: %d\n", info->max, info->min);
-    fun_minMax32_clear(info);
+    UTIL_minMax_clear(info);
 }
 
 void UTIL_minMax_updateMin(MinMax_Info32_t *info, u32 value) {
