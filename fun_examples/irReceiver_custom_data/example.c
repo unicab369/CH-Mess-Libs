@@ -5,9 +5,12 @@
 // how many lines of log to show when printing long data
 #define IR_RECEIVER_LINE_LOG 5
 
+#define MAX_WORDS_LEN 200
+u16 WORD_BUFFER[MAX_WORDS_LEN] = {0};
+
 void onHandle_irReceiver(u16 *words, u16 len) {
 	printf("\n\nReceived Buffer Len %d\n", len);
-	s16 limit = len > MAX_WORDS ? MAX_WORDS : len;
+	s16 limit = len > MAX_WORDS_LEN ? MAX_WORDS_LEN : len;
 	s16 line_offset = (limit / 8) - IR_RECEIVER_LINE_LOG;
 	u8 start = line_offset > 0 ? line_offset * 8 : 0;
 
@@ -29,6 +32,8 @@ int main() {
 
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
+		.WORD_BUFFER_LEN = MAX_WORDS_LEN,
+		.WORD_BUFFER = WORD_BUFFER,
 	};
 
 	fun_irReceiver_init(&receiver);

@@ -238,9 +238,10 @@ typedef struct {
 
 #else
 
+	#define IR_RECEIVER_TIMEOUT_US 300000	// 300ms
+
 	// uncomment to show cycle log
 	// #define IR_RECEIVER_CYCLE_LOG
-
 
 	// #define IR_RECEIVER_HIGH_THRESHOLD 2000
 	// #define IR_SENDER_LOGICAL_1_US 1600
@@ -254,20 +255,19 @@ typedef struct {
 	//! RECEIVE FUNCTIONS USING GPIO
 	//! ####################################
 
-	#define MAX_WORDS 200
-	u16 word_buf[MAX_WORDS] = {0};
-	u16 word_idx = 0;
-
 	typedef struct {
 		u8 pin;
 		u16 BIT_BUFFER[16];
 		u16 bit_buf_idx;
-		u32 time_ref, timeout_ref;
 		u8 prev_state, current_state;
+		u32 time_ref, timeout_ref;
+
+		u16 WORD_BUFFER_LEN;
+		u16 *WORD_BUFFER;
+		u16 word_idx;
 	} IR_Receiver_t;
 
 	Cycle_Info_t ir_cycle;
-
 
 	//* INIT FUNCTION
 	void fun_irReceiver_init(IR_Receiver_t* model) {
@@ -279,20 +279,21 @@ typedef struct {
 		model->bit_buf_idx = 0,
 		model->prev_state = 0,
 		model->current_state = 0,
+
 		UTIL_cycleInfo_clear(&ir_cycle);		// clear cycle
 	}
 
 	//* PROCESS BUFFER FUNCTION
 	void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u16*, u16)) {
 		//! make callback
-		if (word_idx > 0) handler(word_buf, word_idx);
+		if (model->word_idx > 0) handler(model->WORD_BUFFER, model->word_idx);
 		model->prev_state = model->current_state;
 
 		//! Reset values
 		memset(model->BIT_BUFFER, 0, sizeof(model->BIT_BUFFER));
 		model->bit_buf_idx = 0;
-		memset(word_buf, 0, sizeof(word_buf));
-		word_idx = 0;
+		memset(model->WORD_BUFFER, 0, sizeof(model->WORD_BUFFER));
+		model->word_idx = 0;
 	}
 
 	//* TASK FUNCTION
@@ -308,8 +309,8 @@ typedef struct {
 			//# STEP 1: Filter out high thresholds
 			if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
 				//! prevent overflow
-				if (word_idx >= MAX_WORDS) {
-					printf("max words: %d\n", word_idx);
+				if (model->word_idx >= model->WORD_BUFFER_LEN) {
+					printf("max words: %d\n", model->word_idx);
 
 					//# STEP 3: Process Buffer when it's full
 					_irReceiver_processBuffer(model, handler);
@@ -324,11 +325,12 @@ typedef struct {
 				u16 delta_0 = abs(IR_SENDER_LOGICAL_0_US - elapsed);
 				int bit = delta_1 < delta_0;
 
-				u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F); 	// &0x0F is %16
-				if (bit) word_buf[word_idx] |= 1 << bit_pos;		// MSB first (reversed)
+				u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F);  // &0x0F is %16
+				// MSB first (reversed)
+				if (bit) model->WORD_BUFFER[model->word_idx] |= 1 << bit_pos;
 
 				if (bit_pos == 0) {
-					word_idx++;					// next word
+					model->word_idx++;			// next word
 					model->bit_buf_idx = 0;		// reset the buffer
 				} else {
 					model->bit_buf_idx++;		// next bit
@@ -340,7 +342,7 @@ typedef struct {
 		}
 
 		//# STEP 4: Timeout handler
-		if ((micros() - model->timeout_ref) > 500000) {
+		if ((micros() - model->timeout_ref) > IR_RECEIVER_TIMEOUT_US) {
 			model->timeout_ref = micros();
 
 			//! process the buffer
