@@ -3,14 +3,18 @@
 
 // #define IR_RECEIVER_NEC_USE_DMA
 
-//# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
-#define IR_RECEIVER_DEBUGLOG 1
+#define IR_DECODE_TIMEOUT_US 100000		// 100ms
+#define IR_NEC_BUFFER_LEN 4
 
+//# Debug Mode: 0 = disable, 1 = log level 1, 2 = log level 2
+#define IR_RECEIVER_DEBUGLOG 0
+
+//# for DMA
 #define IR_NEC_LOGICAL_1_THRESHOLD_TICK 300
 #define IR_NEC_START_PULSE_THRESHOLD_TICK 700
 
-#define IR_DECODE_TIMEOUT_US 100000		// 100ms
-#define IR_NEC_BUFFER_LEN 4
+//# for GPIO
+#define IR_PULSE_BUF_LEN 64
 
 typedef struct {
 	int pin;
@@ -40,7 +44,8 @@ typedef struct {
     #define TIM1_BUFFER_LAST_IDX (IR_MAX_PULSES - 1)
     uint16_t ir_ticks_buff[IR_MAX_PULSES];
 
-    void fun_irReceiver_NEC_init(IRReceiver_t* model) {
+    //* INIT FUNCTION
+    void fun_irReceiver_NEC_init(IR_ReceiverNEC_t* model) {
         printf("IRReceiver DMA init\n");
         funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
         funDigitalWrite(model->pin, 1);
@@ -87,7 +92,8 @@ typedef struct {
     //! RECEIVE FUNCTION USING DMA
     //! ####################################
 
-    void _irReceiver_NEC_flush(IRReceiver_t* model, void(*handler)(u16*, u8)) {
+    //* PROCESS BUFFER FUNCTION
+    void _irReceiver_NEC_flush(IR_ReceiverNEC_t* model, void(*handler)(u16*, u8)) {
         handler(model->BUFFER, IR_NEC_BUFFER_LEN);
 
         //# clear out ir data
@@ -95,7 +101,8 @@ typedef struct {
         model->bits_processed = 0;   
     }
 
-    void fun_irReceiver_NEC_task(IRReceiver_t* model, void(*handler)(u16*, u8)) {
+    //* TASK FUNCTION
+    void fun_irReceiver_NEC_task(IR_ReceiverNEC_t* model, void(*handler)(u16*, u8)) {
         // Must perform modulus here, in case DMA_IN->CNTR == 0.
         int head = (IR_MAX_PULSES - IR_DMA_IN->CNTR) & TIM1_BUFFER_LAST_IDX;
 
@@ -108,7 +115,7 @@ typedef struct {
             //! Performs modulus to loop back.
             model->counterIdx = (model->counterIdx+1) & TIM1_BUFFER_LAST_IDX;
 
-            //# Timer overflow handling
+            //! Timer overflow handling
             if (time_of_event >= prev_time_of_event) {
                 elapsed = time_of_event - prev_time_of_event;
             } else {
@@ -128,18 +135,13 @@ typedef struct {
                 int word_idx = model->bits_processed >> 4;          // bits_processed / 16
                 model->bits_processed++;
 
-                //# STEP 3: Decode here, filter for Logical HIGH
+                //# STEP 3: Collect data, filter for Logical HIGH
                 if (elapsed > IR_NEC_LOGICAL_1_THRESHOLD_TICK) {
                     model->BUFFER[word_idx] |= (1 << bit_pos);		// MSB first (reversed)
                 }
 
-                model->time_ref =  micros();
-                            
-                //! enough data to collect
-                if (bit_pos == 0 && word_idx == 3) {
-                    //# STEP 4: Complete frame
-                    _irReceiver_NEC_flush(model, handler);
-                }
+                //# STEP 4: Complete frame
+                if (bit_pos == 0 && word_idx == 3) _irReceiver_NEC_flush(model, handler);
             }
 
             //# STEP 1: filter HIGH start frame. Expect > 1200 ticks
@@ -147,8 +149,9 @@ typedef struct {
                 // printf("\nFrame HIGH: %d\n", elapsed);
                 model->ir_started = 1;
                 model->bits_processed = 0;
-                model->time_ref =  micros();
             }
+
+            model->time_ref =  micros();
         }
 
         //# STEP 5: handle timeout
@@ -169,6 +172,7 @@ typedef struct {
 	#define IR_NEC_LOGICAL_1_THRESHOLD_US 1000
     #define IR_NEC_START_PULSE_THRESHOLD_US 3000
 
+    //* INIT FUNCTION
 	void fun_irReceiver_NEC_init(IR_ReceiverNEC_t* model) {
 		printf("IRReceiver GPIO init\n");
 		funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
@@ -176,15 +180,14 @@ typedef struct {
 
 		//! restart states
 		model->ir_started = 0;
-		model->current_state = 0;
-		model->prev_state = 0;
+		model->current_state = model->prev_state = 0;
 	}
-
 
 	//! ####################################
 	//! RECEIVE FUNCTIONS USING GPIO
 	//! ####################################
 
+    //* PROCESS BUFFER FUNCTION
     void _irReceiver_NEC_flush(IR_ReceiverNEC_t* model, void (*handler)(u16*, u8)) {
         // even elements are low signals (logical spacing)
         for (int i = 0; i < model->counterIdx; i += 1) {
@@ -199,26 +202,24 @@ typedef struct {
             if (bit) model->BUFFER[word_idx] |= 1 << bit_pos;
 
             //! IMPORTANTE: printf statements introduce delays
-            // #if IR_RECEIVER_DEBUGLOG == 1
-            // 	const char *bitStr = bit ? "1" : ".";
-            // 	printf("%d \t %s \t 0x%04X D%d\n",
-            // 		model->pulse_buf[i], bitStr, model->ir_data[word_idx], bit_pos);
-            // 	// separator
-            // 	if (bit_pos % 8 == 0) printf("\n");
-            // #endif
+            #if IR_RECEIVER_DEBUGLOG == 1
+            	const char *bitStr = bit ? "1" : ".";
+                printf("%d \t %s \t 0x%04X D%d\n",
+                    model->pulse_buf[i], bitStr, model->BUFFER[word_idx], bit_pos);
+                // separator
+                if (bit_pos % 8 == 0) printf("\n");
+            #endif
         }
 
         //# STEP 4: handle completed packet
         handler(model->BUFFER, IR_NEC_BUFFER_LEN);
 
         //! clear data
-		model->bits_processed = 0;
-		model->counterIdx = 0;
 		memset(model->BUFFER, 0, IR_NEC_BUFFER_LEN * sizeof(model->BUFFER[0]));
+        model->counterIdx = model->bits_processed = 0;
     }
 
-	//# Receive IR task
-	//! IMPORTANTE: printf statements introduce delays
+	//* TASK FUNCTION
 	void fun_irReceiver_NEC_task(IR_ReceiverNEC_t* model, void (*handler)(u16*, u8)) {
 		if (model->pin == -1) return;
 		model->current_state = funDigitalRead(model->pin);
@@ -230,19 +231,15 @@ typedef struct {
 			//! clear pulses count
 			model->counterIdx = 0;
 			model->time_ref = micros();
-			model->prev_state = model->current_state;
 		}
 
 		//# STEP 2: detecting start signals
 		else if (model->ir_started == 1) {
+            //# State changed
 			if (model->current_state != model->prev_state) {
-				//! State changed - record duration
 				model->pulse_buf[model->counterIdx] = micros() - model->time_ref;
-
-				//! update pulses count
 				model->counterIdx++;
 				model->time_ref = micros();
-				model->prev_state = model->current_state;
 
 				//! IMPORTANTE: printf statements introduce delays
 				//! start pulses: 9ms HIGH, 4.5ms LOW
@@ -256,41 +253,38 @@ typedef struct {
 					}
 
 					//! clear data
-                    model->bits_processed = 0;
-                    model->counterIdx = 0;
                     memset(model->BUFFER, 0, IR_NEC_BUFFER_LEN * sizeof(model->BUFFER[0]));
+                    model->counterIdx = model->bits_processed = 0;
 				}
 			}
 		}
 
 		//# STEP 3: handling data pulses
 		else if (model->ir_started == 2) {
+            //# State changed
 			if (model->current_state != model->prev_state) {
-				//! State changed - record duration
 				if (!model->current_state) {
+                    //! only record low signals (logical spacing)
 					model->pulse_buf[model->counterIdx] = micros() - model->time_ref;
 					model->counterIdx++;
 				}
-				
 				model->time_ref = micros();
-				model->prev_state = model->current_state;
 				
 				//! enough data to collect
-				if (model->counterIdx >= 64) {
-                    _irReceiver_NEC_flush(model, handler);
-				}
+				if (model->counterIdx >= 64) _irReceiver_NEC_flush(model, handler);
 			}
 
 			//# STEP 5: handle outout - restart states
 			else if (micros() - model->time_ref > IR_DECODE_TIMEOUT_US) {
                 _irReceiver_NEC_flush(model, handler);
 
-				//! restart states
-				model->ir_started = 0;
-				model->current_state = 0;
-				model->prev_state = 0;
+                //! restart states
+                model->ir_started = 0;
+                model->current_state = model->prev_state = 0;
 			}	
 		}
+
+        model->prev_state = model->current_state;
 	}
 
 #endif
