@@ -4,3 +4,4 @@
 
 #include "systick_irq.h"
 #include "fun_log.h"
+#include "fun_analyzer.h"
