@@ -17,7 +17,7 @@ int main() {
 	Delay_Ms(100);
 	funGpioInitAll();
 	
-	IRReceiver_t receiver = {
+	IR_ReceiverNEC_t receiver = {
 		.pin = IR_RECEIVER_PIN,
 	};
 
