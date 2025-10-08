@@ -243,13 +243,15 @@ typedef struct {
 	// uncomment to show cycle log
 	// #define IR_RECEIVER_CYCLE_LOG
 
-	// #define IR_RECEIVER_HIGH_THRESHOLD 2000
-	// #define IR_SENDER_LOGICAL_1_US 1600
-	// #define IR_SENDER_LOGICAL_0_US 560
-
-	#define IR_RECEIVER_HIGH_THRESHOLD 800
-	#define IR_SENDER_LOGICAL_1_US 550
-	#define IR_SENDER_LOGICAL_0_US 300
+	#ifdef IR_RECEIVER_FAST_MODE
+		#define IR_RECEIVER_HIGH_THRESHOLD 800
+		#define IR_SENDER_LOGICAL_1_US 550
+		#define IR_SENDER_LOGICAL_0_US 300
+	#else
+		#define IR_RECEIVER_HIGH_THRESHOLD 2000
+		#define IR_SENDER_LOGICAL_1_US 1600
+		#define IR_SENDER_LOGICAL_0_US 560
+	#endif
 
 	//! ####################################
 	//! RECEIVE FUNCTIONS USING GPIO

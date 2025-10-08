@@ -1,14 +1,8 @@
+#define IR_RECEIVER_FAST_MODE
+
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
-
-// #define IR_RECEIVER_HIGH_THRESHOLD 2000
-// #define IR_SENDER_LOGICAL_1_US 1600
-// #define IR_SENDER_LOGICAL_0_US 560
-
-#define IR_RECEIVER_HIGH_THRESHOLD 800
-#define IR_SENDER_LOGICAL_1_US 550
-#define IR_SENDER_LOGICAL_0_US 300
 
 #define IR_RECEIVER_PULSES_LEN 400
 
@@ -21,6 +15,7 @@ MinMax_Info32_t minMax = {0};
 u16 receive_buf[IR_RECEIVER_PULSES_LEN];
 u16 receive_buf_idx;
 
+//* PROCESS BUFFER FUNCTION
 void _irReceiver_processBuffer2(IR_Receiver_t *model) {
 	//! check for valid length
 	if (receive_buf_idx > 0) {
@@ -76,6 +71,7 @@ void _irReceiver_processBuffer2(IR_Receiver_t *model) {
 
 Cycle_Info_t cycle;
 
+//* TASK FUNCTION
 void _irReceiver_task(IR_Receiver_t *model) {
 	static u32 time_ref, timeout_ref;
 
@@ -114,7 +110,7 @@ void _irReceiver_task(IR_Receiver_t *model) {
     }
 
 	//# STEP 4: Timeout handler
-    if ((micros() - timeout_ref) > 500000) {
+    if ((micros() - timeout_ref) > IR_RECEIVER_TIMEOUT_US) {
         timeout_ref = micros();
 
 		//! process the buffer
@@ -130,10 +126,11 @@ void _irReceiver_task(IR_Receiver_t *model) {
 int main() {
 	SystemInit();
 	systick_init();			//! REQUIRED for millis()
-
-	printf("\r\nIR Receiver Test.\r\n");
 	Delay_Ms(100);
 	funGpioInitAll();
+
+	printf("\r\nIR Receiver Test.\r\n");
+	printf("Receiver High Threshold: %d\r\n", IR_RECEIVER_HIGH_THRESHOLD);
 
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,

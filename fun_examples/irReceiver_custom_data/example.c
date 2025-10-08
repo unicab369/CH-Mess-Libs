@@ -1,3 +1,5 @@
+#define IR_RECEIVER_FAST_MODE
+
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
@@ -25,10 +27,11 @@ void onHandle_irReceiver(u16 *words, u16 len) {
 int main() {
 	SystemInit();
 	systick_init();			//! REQUIRED for millis()
-
-	printf("\r\nIR Receiver Test.\r\n");
 	Delay_Ms(100);
 	funGpioInitAll();
+
+	printf("\r\nIR Receiver Test.\r\n");
+	printf("Receiver High Threshold: %d\r\n", IR_RECEIVER_HIGH_THRESHOLD);
 
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
