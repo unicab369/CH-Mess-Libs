@@ -117,18 +117,7 @@ void _IR_carrier_pulse(u32 duration_us, u32 space_us) {
 
 u8 state = 0;
 
-void fun_irSend_NECData2(u16 data) {
-	// PWM_ON();
-	// Delay_Us(NEC_LOGIC_0_WIDTH_US);
-	// PWM_OFF();
-	// Delay_Us(NEC_LOGIC_0_WIDTH_US);
-
-	// PWM_ON();
-	// Delay_Us(NEC_LOGIC_1_WIDTH_US);
-	// PWM_OFF();
-	// Delay_Us(NEC_LOGIC_1_WIDTH_US);
-
-
+void fun_irSend_CustomData(u16 data) {
     for (int i = 15; i >= 0; i--)  {
         u8 bit = (data >> i) & 1;        // MSB first
         u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
@@ -144,60 +133,25 @@ void fun_irSend_NECData2(u16 data) {
     }
 }
 
-// void fun_irSend_NECData(u16 data) {
-// 	// printf("sent: 0x%04X\n", data);
+void fun_irSend_NECData(u16 data) {
+	// printf("sent: 0x%04X\n", data);
 
-// 	for (int i = 15; i >= 0; i--) {
-// 		u8 bit = (data >> i) & 1;		// MSB first
-// 		u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
-// 		// _IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, space);
+	for (int i = 15; i >= 0; i--) {
+		u8 bit = (data >> i) & 1;		// MSB first
+		u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
+		// _IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US, space);
 
-// 		if (state) {
-// 			PWM_ON();
-// 		} else {
-// 			PWM_OFF();
-// 		}
+		if (state) {
+			PWM_ON();
+		} else {
+			PWM_OFF();
+		}
 
-// 		state =! state;
-// 		Delay_Us(space);
-// 	}
-// }
-
-void fun_irSender_sendMessages() {
-	// u64 combined = combine_64(address, command, extra, 0x00);
-	// u16 crc = crc16_ccitt_compute(combined);
-
-	// u64 dataout = 0;
-	// u64 combined2 = combine_64(address, command, extra, crc);
-	// u8 check = crc16_ccitt_check64(combined2, &dataout);
-
-	// #if IR_SENDER_DEBUGLOG > 0
-	// 	printf("check crc 0x%04X: %d\r\n", crc, check);
-	// 	printf("Data: 0x%08X%08X\n", 
-	// 		(uint32_t)(combined2 >> 32), 
-	// 		(uint32_t)(combined2 & 0xFFFFFFFF));
-	// #endif
-
-	u32 ref = millis();
-
-	_IR_carrier_pulse(2000, 2000);
-
-	// fun_irSend_NECData2(0xFFFF);
-	// fun_irSend_NECData2(0xFFF1);
-
-	u16 data = 0x0000;
-
-	for (int i = 0; i < 150; i++) {
-		fun_irSend_NECData2(data);
-		data++;
-		// Delay_Us(5);
+		state =! state;
+		Delay_Us(space);
 	}
-
-	// terminating signals
-	PWM_ON(); Delay_Us(1000); PWM_OFF();
-
-	printf("messages in %d ms\r\n", millis() - ref);
 }
+
 
 //! ####################################
 //! ASYNC TRANSMIT FUNCTIONS
