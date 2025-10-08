@@ -84,7 +84,7 @@ void _irReceiver_task(IRReceiver_t* model) {
     model->current_pinState = funDigitalRead(model->pin);
 	u32 moment = micros();
 
-	//! chec for state change
+	//! check for state change
     if (model->current_pinState != model->prev_pinState) {
 		u16 elapsed = moment - time_ref;
 		u8 addHighThreshold = fun_thresholdBuffer_addUpperValue(&thresholdBuf, elapsed);
@@ -96,7 +96,7 @@ void _irReceiver_task(IRReceiver_t* model) {
 			}
 			fun_minMax32_updateMin(&minMax, elapsed);
 
-			//! collect data
+			//# STEP 2: collect data
 			receive_buf[receive_buf_idx] = elapsed;
 			receive_buf_idx++;
 
@@ -104,7 +104,7 @@ void _irReceiver_task(IRReceiver_t* model) {
 			if (receive_buf_idx >= IR_MAX_PULSES2) {
 				printf("Max pulses reached: %d\n", receive_buf_idx);
 
-				//# STEP 2: Process Buffer when it's full
+				//# STEP 3: Process Buffer when it's full
 				_irReceiver_processBuffer(&model);
 				return;
 			}
@@ -114,7 +114,7 @@ void _irReceiver_task(IRReceiver_t* model) {
 		timeout_ref = micros();
     }
 
-	//# STEP 3: Timeout handler
+	//# STEP 4: Timeout handler
     if ((micros() - timeout_ref) > 500000) {
         timeout_ref = micros();
 
@@ -130,7 +130,6 @@ void _irReceiver_task(IRReceiver_t* model) {
     }
 
     model->prev_pinState = model->current_pinState;
-
 	fun_cycleInfo_updateWithLimit(&cycle, micros() - moment, 50);
 }
 

@@ -9,12 +9,6 @@
 
 #define IR_RECEIVER_PIN PD2
 
-#define ROUND_TO_NEAREST_10(x)  ((x + 5) / 10 * 10)
-
-void on_handle_irReceiver(u16 *data, u16 len) {
-
-}
-
 // how many lines of log to show when printing long data
 #define IR_RECEIVER_LOG_LINE 5
 
@@ -32,16 +26,17 @@ typedef struct {
 	u8 pin;
 	u16 buf[IR_MAX_PULSES2];
 	u16 buf_idx;
-	u32 highthreshold_buf[5];
-	u8 highthreshold_idx;
 	u32 timeRef;
 	u32 timeoutRef;
-	u32 bits_processed;			// number of bits processed
-} IRAnalyzer_t;
+	u8 prev_state;
+	u8 current_state;
+} IR_Receiver_t;
 
-IRAnalyzer_t IRAnalyzer = {
+IR_Receiver_t IRAnalyzer = {
 	.pin = IR_RECEIVER_PIN,
 	.buf_idx = 0,
+	.prev_state = 0,
+	.current_state = 0,
 };
 
 Cycle_Info_t cycle;
@@ -50,7 +45,7 @@ Cycle_Info_t cycle;
 u16 word_buf[MAX_WORDS] = {0};
 volatile u16 word_idx = 0;
 
-void _irReceiver_processBuffer() {
+void _irReceiver_processBuffer(IR_Receiver_t *model) {
 	if (word_idx > 0) {
 		printf("\n\nReceived Buffer Len %d\n", word_idx);
 		s16 limit = word_idx > MAX_WORDS ? MAX_WORDS : word_idx;
@@ -75,26 +70,24 @@ void _irReceiver_processBuffer() {
 		}
 	}
 
-	IRAnalyzer.highthreshold_idx = 0;
-
-	memset(IRAnalyzer.buf, 0, sizeof(IRAnalyzer.buf));
-	IRAnalyzer.buf_idx = 0;
+	memset(model->buf, 0, sizeof(model->buf));
+	model->buf_idx = 0;
 	memset(word_buf, 0, sizeof(word_buf));
 	word_idx = 0;
 }
 
-void fun_irReceiver_task2(IRReceiver_t* model, void (*handler)(u16*, u8)) {
+void fun_irReceiver_task2(IR_Receiver_t* model) {
     if (model->pin == -1) return;
-    model->current_pinState = funDigitalRead(model->pin);
+    model->current_state = funDigitalRead(model->pin);
 	u32 now = micros();
 
-    if (model->current_pinState != model->prev_pinState) {
+    if (model->current_state != model->prev_state) {
 		//! get time difference
-		u16 elapsed = now - IRAnalyzer.timeRef;
+		u16 elapsed = now - model->timeRef;
 
 		if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
 			//! collect data
-			IRAnalyzer.buf[IRAnalyzer.buf_idx] = elapsed;
+			model->buf[model->buf_idx] = elapsed;
 
 			u16 delta_1 = abs(IR_SENDER_LOGICAL_1_US - elapsed);
 			u16 delta_0 = abs(IR_SENDER_LOGICAL_0_US - elapsed);
@@ -103,67 +96,66 @@ void fun_irReceiver_task2(IRReceiver_t* model, void (*handler)(u16*, u8)) {
 			//! prevent overflow
 			if (word_idx >= MAX_WORDS) {
 				printf("max words: %d\n", word_idx);
-				_irReceiver_processBuffer();
-				model->prev_pinState = model->current_pinState;
+				_irReceiver_processBuffer(&IRAnalyzer);
+				model->prev_state = model->current_state;
 				return;
 			}
 
-			u32 bit_pos = 15 - (IRAnalyzer.buf_idx & 0x0F);  	// &0x0F is %16
+			u32 bit_pos = 15 - (model->buf_idx & 0x0F);  	// &0x0F is %16
 			if (bit) word_buf[word_idx] |= 1 << bit_pos;		// MSB first (reversed)
 
 			if (bit_pos == 0) {
 				word_idx++;
-				IRAnalyzer.buf_idx = 0;
+				model->buf_idx = 0;
 			} else {
-				IRAnalyzer.buf_idx++;
+				model->buf_idx++;
 			}
 		}
-		else {
-			IRAnalyzer.highthreshold_buf[IRAnalyzer.highthreshold_idx] = elapsed;
-			IRAnalyzer.highthreshold_idx++;
-		}
 
-		IRAnalyzer.timeRef = micros();
-		IRAnalyzer.timeoutRef = micros();
+
+		model->timeRef = micros();
+		model->timeoutRef = micros();
     }
 
 	//! timeout
-    if ((micros() - IRAnalyzer.timeoutRef) > 500000) {
-        IRAnalyzer.timeoutRef = micros();
+    if ((micros() - model->timeoutRef) > 500000) {
+        model->timeoutRef = micros();
 
-		_irReceiver_processBuffer();
+		//# flush the buffer
+		_irReceiver_processBuffer(&IRAnalyzer);
 		fun_cycleInfo_flush(&cycle);
 
 		//! Reset values
-		IRAnalyzer.buf_idx = 0;
-		memset(IRAnalyzer.buf, 0, sizeof(IRAnalyzer.buf));
+		model->buf_idx = 0;
+		memset(model->buf, 0, sizeof(model->buf));
 		word_idx = 0;
 		memset(word_buf, 0, sizeof(word_buf));
     }
 
-    model->prev_pinState = model->current_pinState;
-
+    model->prev_state = model->current_state;
 	fun_cycleInfo_updateWithLimit(&cycle, micros() - now, 50);
 }
 
 
 int main() {
 	SystemInit();
-	Delay_Ms(100);
 	systick_init();			//! REQUIRED for millis()
 
 	printf("\r\nIR Receiver Test.\r\n");
+	Delay_Ms(100);
 	funGpioInitAll();
 
-	IRReceiver_t receiver = {
-		.pin = IR_RECEIVER_PIN,
-	};
+	// IRReceiver_t receiver = {
+	// 	.pin = IR_RECEIVER_PIN,
+	// };
 
-	fun_irReceiver_init(&receiver);
+	funPinMode(IRAnalyzer.pin, GPIO_CFGLR_IN_PUPD);
+	funDigitalWrite(IRAnalyzer.pin, 1);
 
+	// fun_irReceiver_init(&receiver);
 	fun_cycleInfo_clear(&cycle);
 
 	while(1) {
-		fun_irReceiver_task2(&receiver, on_handle_irReceiver);
+		fun_irReceiver_task2(&IRAnalyzer);
 	}
 }
