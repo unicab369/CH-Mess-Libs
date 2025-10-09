@@ -31,7 +31,6 @@
 
 #define IR_USE_TIM1_PWM
 
-
 // Enable/disable PWM carrier
 static inline void PWM_ON(void)  { TIM1->CCER |=  TIM_CC1NE; }
 static inline void PWM_OFF(void) { TIM1->CCER &= ~TIM_CC1NE; }
@@ -76,97 +75,6 @@ u8 fun_irSender_init(u8 pin) {
 }
 
 //! ####################################
-//! TRANSMIT FUNCTIONS
-//! ####################################
-
-// carrier frequency = 38kHz
-// period = 1/38000 = 26.5µs
-// half period = 26.5µs / 2 = ~13µs
-#define IR_CARRIER_HALF_PERIOD_US 13
-
-//* CARRIER PULSE (BLOCKING)
-void _IR_carrier_pulse(u32 duration_us) {
-	// the pulse has duration the same as NEC_LOGIC_0_WIDTH_US
-	#ifdef IR_USE_TIM1_PWM
-		//# Start CH1N output
-		PWM_ON();
-		Delay_Us(duration_us);
-
-		//# Stop CH1N output
-		PWM_OFF();
-	#else
-		u16 carrier_cycles = duration_us / (IR_CARRIER_HALF_PERIOD_US * 2);
-
-		for(u32 i = 0; i < carrier_cycles; i++) {
-			funDigitalWrite(irSender_pin, 1);  	// Set high
-			Delay_Us( IR_CARRIER_HALF_PERIOD_US );
-			funDigitalWrite(irSender_pin, 0);   // Set low
-			Delay_Us( IR_CARRIER_HALF_PERIOD_US );
-		}
-
-		// Ensure pin is low during space
-		funDigitalWrite(irSender_pin, 0);
-	#endif
-}
-
-//* SEND NEC (BLOCKING)
-void fun_irSender_sendNEC_blocking(u16* data, u8 len) {
-	_IR_carrier_pulse(3000);
-	Delay_Us(3000);
-
-	// loop through the data
-	for (int k = 0; k < len; k++) {
-		// loop through the bits
-		for (int i = 15; i >= 0; i--) {
-			u8 bit = (data[k] >> i) & 1;		// MSB first
-			u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
-			
-			//! NEC data start with a pulse
-			//!and then a space that represents the LOGICAL value
-			_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
-			Delay_Us(space);
-		}
-	}
-
-	// terminating signals
-	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
-}
-
-//* SEND CUSTOM TEST (BLOCKING)
-void fun_irSend_CustomTestData() {
-	static u8 state = 0;
-	_IR_carrier_pulse(3000);
-	Delay_Us(3000);
-
-	u16 data = 0x0000;
-
-	// loop through the data
-	for (int i = 0; i < 150; i++) {
-		// loop through the bits
-		for (int i = 15; i >= 0; i--)  {
-			u8 bit = (data >> i) & 1;        // MSB first
-			u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
-
-			//! Custom data only use space as LOGICAL value
-			//! the space can happen while the carrier is on or off
-			if (state == 0) {
-				_IR_carrier_pulse(space);
-			} else {
-				Delay_Us(space);
-			}
-			
-			state = !state;
-		}
-
-		data++;
-	}
-
-	// terminating signals
-	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
-}
-
-
-//! ####################################
 //! ASYNC TRANSMIT FUNCTIONS
 //! ####################################
 
@@ -181,16 +89,17 @@ typedef enum {
 } IRSender_State_t;
 
 typedef struct {
-	int pin;
-	int state;
-	int output_state;
+	int pin;					// gpio pin
+	int state;					// current state
+	int logic_output;			// logic output for custom protocol
 	u32 time_ref;
-	u16 remaining_data_bits;
-	u16 logical_spacing;
+	u16 remaining_data_bits;	// number of bits (of a word) to send
+	u16 logical_spacing;		// spacing that represents logic output
 
-	u16 *BUFFER;
-	s16 BUFFER_LEN;
-	s16 buffer_idx;
+	u16 *BUFFER;				// words buffer
+	s16 BUFFER_LEN;				// words buffer length
+	s16 buffer_idx;				// current buffer index
+	u8 USE_NEC_PROTOCOL;
 } IR_Sender_t;
 
 
@@ -201,10 +110,10 @@ void fun_irSender_asyncSend(IR_Sender_t *model) {
 	model->state = IR_Start_Pulse;
 	model->time_ref = micros();
 	model->buffer_idx = 0;
-	printf("\nSending Data\r\n");
 }
 
-//* NEC TRANSMIT ASYNC. Only works with PWM
+//* NEC TRANSMIT ASYNC. 
+//! NOTE: Only works with PWM
 void fun_irSender_asyncTask(IR_Sender_t *model) {
 	if (model->state == IR_Idle) return;
 	u32 elapsed = micros() - model->time_ref;
@@ -224,16 +133,20 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			if (model->buffer_idx < model->BUFFER_LEN && 
 				model->remaining_data_bits > 0
 			) {
-				// PWM_ON();
-				// Delay_Us(NEC_LOGIC_0_WIDTH_US);
-				// PWM_OFF();
-
-				if (model->output_state == 0) {
+				if (model->USE_NEC_PROTOCOL) {
+					// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
 					PWM_ON();
-				} else {
+					Delay_Us(NEC_LOGIC_0_WIDTH_US);
 					PWM_OFF();
+				} else {
+					// Custom protocol uses any of the PWM states for LOGICAL value
+					if (model->logic_output == 0) {
+						PWM_ON();
+					} else {
+						PWM_OFF();
+					}
+					model->logic_output = !model->logic_output;
 				}
-				model->output_state = !model->output_state;
 
 				u16 value = model->BUFFER[model->buffer_idx];
 				u8 bit = (value >> (model->remaining_data_bits-1)) & 1;
@@ -244,7 +157,7 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				model->remaining_data_bits--;
 				model->time_ref = micros();		//! REQUIRES new micros() bc carrier pulse is blocking
 				
-				// // Bypassing for STEP 4
+				// // Bypass for STEP 4 - use for debugging only
 				// Delay_Us(model->logical_spacing);
 
 				if (model->remaining_data_bits == 0) {
@@ -287,7 +200,7 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				model->remaining_data_bits = IR_DATA_BITs_LEN;	// reload remaining data bits
 				model->logical_spacing = 0;
 				model->buffer_idx = 0;
-				model->output_state = 0;
+				model->logic_output = 0;
 			}
 			break;
 

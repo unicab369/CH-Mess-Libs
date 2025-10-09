@@ -13,10 +13,18 @@ int main() {
 	u8 mode = fun_irSender_init(IR_SENDER_PIN);
 	printf("Mode: %s\r\n", mode ? "PWM" : "Manual GPIO");
 
-	// _irSender_sendMessages();
 	u32 time_ref = millis();
 
-	IR_Sender_t irSender = {0};
+	IR_Sender_t irSender = {
+		// .USE_NEC_PROTOCOL = 0
+		.USE_NEC_PROTOCOL = 1
+	};
+
+	static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111 };
+	irSender.BUFFER = data_out;
+	irSender.BUFFER_LEN = 4;
+
+	fun_irSender_asyncSend(&irSender);
 
 	while(1) {
 		if ((millis() - time_ref) > 3000) {
@@ -34,21 +42,12 @@ int main() {
 			// 		(uint32_t)(combined2 & 0xFFFFFFFF));
 			// #endif
 
-			u32 ref = millis();
+			printf("Sendding message");
+			fun_irSender_asyncSend(&irSender);
 
-			static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111 };
-			// fun_irSender_sendNEC_blocking(data_out, 4);
-			fun_irSend_CustomTestData();
-
-			// irSender.BUFFER = data_out;
-			// irSender.BUFFER_LEN = 4;
-
-			// fun_irSender_asyncSend(&irSender);
-
-			printf("messages in %d ms\r\n", millis() - ref);
 			time_ref = millis();
 		}
 
-		// fun_irSender_asyncTask(&irSender);
+		fun_irSender_asyncTask(&irSender);
 	}
 }

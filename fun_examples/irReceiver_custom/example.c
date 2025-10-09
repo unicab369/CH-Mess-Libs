@@ -5,7 +5,7 @@
 #define IR_RECEIVER_PIN PD2
 
 // how many lines of log to show when printing long data
-#define IR_RECEIVER_LINE_LOG 8
+#define IR_RECEIVER_LINE_LOG 255
 
 #define MAX_WORDS_LEN 200
 u16 WORD_BUFFER[MAX_WORDS_LEN] = {0};
