@@ -26,9 +26,6 @@
 
 // #define IR_SENDER_DEBUGLOG 0
 
-#define NEC_LOGIC_1_WIDTH_US 1600
-#define NEC_LOGIC_0_WIDTH_US 560
-
 #define IR_USE_TIM1_PWM
 
 // Enable/disable PWM carrier
@@ -99,17 +96,31 @@ typedef struct {
 	u16 *BUFFER;				// words buffer
 	s16 BUFFER_LEN;				// words buffer length
 	s16 buffer_idx;				// current buffer index
-	u8 USE_NEC_PROTOCOL;
+	u8 IR_MODE;					// 0 = NEC protocol, 1 = NfS1 protocol
 } IR_Sender_t;
 
 
 u32 sending_data = 0x00FFA56D;
+
+static u16 IR_RECEIVER_LOGICAL_1_US = 1600;
+static u16 IR_RECEIVER_LOGICAL_0_US = 560;
 
 void fun_irSender_asyncSend(IR_Sender_t *model) {
 	//! start the pulses
 	model->state = IR_Start_Pulse;
 	model->time_ref = micros();
 	model->buffer_idx = 0;
+
+	switch (model->IR_MODE) {
+		case 0:
+			IR_RECEIVER_LOGICAL_1_US = 1600;
+			IR_RECEIVER_LOGICAL_0_US = 560;
+			break;
+		case 1:
+			IR_RECEIVER_LOGICAL_1_US = 550;
+			IR_RECEIVER_LOGICAL_0_US = 300;
+			break;
+	}
 }
 
 //* NEC TRANSMIT ASYNC. 
@@ -133,13 +144,20 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			if (model->buffer_idx < model->BUFFER_LEN && 
 				model->remaining_data_bits > 0
 			) {
-				if (model->USE_NEC_PROTOCOL) {
-					// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
+				u16 value = model->BUFFER[model->buffer_idx];
+				u8 bit = (value >> (model->remaining_data_bits-1)) & 1;
+				// printf("Sending Value: 0x%04X, remaining: %d\n", value, model->remaining_data_bits);
+				model->remaining_data_bits--;
+				model->logical_spacing = bit ? IR_RECEIVER_LOGICAL_1_US : IR_RECEIVER_LOGICAL_0_US;
+
+				// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
+				if (model->IR_MODE == 0) {
 					PWM_ON();
 					Delay_Us(NEC_LOGIC_0_WIDTH_US);
 					PWM_OFF();
-				} else {
-					// Custom protocol uses any of the PWM states for LOGICAL value
+				}
+				// Custom protocol uses any of the PWM states for LOGICAL value
+				else {
 					if (model->logic_output == 0) {
 						PWM_ON();
 					} else {
@@ -147,16 +165,9 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 					}
 					model->logic_output = !model->logic_output;
 				}
-
-				u16 value = model->BUFFER[model->buffer_idx];
-				u8 bit = (value >> (model->remaining_data_bits-1)) & 1;
-
-				// printf("Sending Value: 0x%04X, remaining: %d\n", value, model->remaining_data_bits);
-
-				model->logical_spacing = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
-				model->remaining_data_bits--;
-				model->time_ref = micros();		//! REQUIRES new micros() bc carrier pulse is blocking
-				
+			
+				//! ORDER DOES MATTER. requires new micros() bc carrier pulse is blocking
+				model->time_ref = micros();
 				// // Bypass for STEP 4 - use for debugging only
 				// Delay_Us(model->logical_spacing);
 
@@ -203,6 +214,5 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				model->logic_output = 0;
 			}
 			break;
-
 	}
 }

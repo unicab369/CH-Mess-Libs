@@ -4,6 +4,9 @@
 
 #define IR_TEST_CUSTOM_PROTOCOL
 
+#define NEC_LOGIC_1_WIDTH_US 1600
+#define NEC_LOGIC_0_WIDTH_US 560
+
 //! ####################################
 //! TRANSMIT FUNCTIONS
 //! ####################################

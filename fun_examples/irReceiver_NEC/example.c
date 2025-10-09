@@ -1,4 +1,4 @@
-#include "../../fun_modules/fun_irReceiverNEC.h"
+#include "fun_irReceiverNEC.h"
 
 #define IR_RECEIVER_PIN PD2
 

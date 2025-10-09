@@ -1,4 +1,4 @@
-// #define IR_RECEIVER_FAST_MODE
+#define IR_RECEIVER_FAST_MODE
 
 #include "../../fun_modules/fun_irReceiver.h"
 
@@ -37,6 +37,8 @@ int main() {
 		.pin = IR_RECEIVER_PIN,
 		.WORD_BUFFER_LEN = MAX_WORDS_LEN,
 		.WORD_BUFFER = WORD_BUFFER,
+		.IR_MODE = 0
+		// .IR_MODE = 1
 	};
 
 	fun_irReceiver_init(&receiver);

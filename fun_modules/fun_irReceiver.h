@@ -31,12 +31,12 @@
 
 #ifdef IR_RECEIVER_FAST_MODE
 	#define IR_RECEIVER_HIGH_THRESHOLD 800
-	#define IR_SENDER_LOGICAL_1_US 550
-	#define IR_SENDER_LOGICAL_0_US 300
+	// #define IR_SENDER_LOGICAL_1_US 550
+	// #define IR_SENDER_LOGICAL_0_US 300
 #else
 	#define IR_RECEIVER_HIGH_THRESHOLD 2200
-	#define IR_SENDER_LOGICAL_1_US 1600
-	#define IR_SENDER_LOGICAL_0_US 560
+	// #define IR_SENDER_LOGICAL_1_US 1600
+	// #define IR_SENDER_LOGICAL_0_US 560
 #endif
 
 //! ####################################
@@ -62,6 +62,7 @@ typedef struct {
 	u8 prev_state, current_state;
 	u32 time_ref, timeout_ref;
 
+	u8 IR_MODE;				// 0 = NEC protocol, 1 = NfS1 protocol
 	u16 WORD_BUFFER_LEN;
 	u16 *WORD_BUFFER;
 	u16 word_idx;
@@ -69,11 +70,28 @@ typedef struct {
 
 Cycle_Info_t ir_cycle;
 
+static u16 IR_SENDER_START_SIGNAL_THRESHOLD_US = 2200;
+static u16 IR_SENDER_LOGICAL_1_US = 1600;
+static u16 IR_SENDER_LOGICAL_0_US = 560;
+
 //* INIT FUNCTION
 void fun_irReceiver_init(IR_Receiver_t* model) {
 	printf("IRReceiver init\n");
 	funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 	funDigitalWrite(model->pin, 1);
+
+	switch (model->IR_MODE) {
+		case 0:
+			IR_SENDER_START_SIGNAL_THRESHOLD_US = 2200;
+			IR_SENDER_LOGICAL_1_US = 1600;
+			IR_SENDER_LOGICAL_0_US = 560;
+			break;
+		case 1:
+			IR_SENDER_START_SIGNAL_THRESHOLD_US = 800;
+			IR_SENDER_LOGICAL_1_US = 550;
+			IR_SENDER_LOGICAL_0_US = 300;
+			break;
+	}
 
 	//! restart states
 	model->bit_buf_idx = 0,
@@ -112,7 +130,14 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 		u16 elapsed = moment - model->time_ref;
 
 		//# STEP 1: Filter out high thresholds
-		if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
+		u8 filter_signal = elapsed < IR_SENDER_START_SIGNAL_THRESHOLD_US;
+
+		// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
+		if (model->IR_MODE == 0) {
+			filter_signal = filter_signal && !model->current_state;
+		}
+
+		if (filter_signal) {
 			//! prevent overflow
 			if (model->word_idx >= model->WORD_BUFFER_LEN) {
 				printf("max words: %d\n", model->word_idx);

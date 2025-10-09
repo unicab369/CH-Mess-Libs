@@ -1,5 +1,4 @@
-#include "fun_base.h"
-#include "fun_crc.h"
+#include "../../fun_modules/fun_base.h"
 
 // #define IR_RECEIVER_NEC_USE_DMA
 
@@ -29,7 +28,6 @@ typedef struct {
     u32 pulse_buf[64];
     u8 prev_state, current_state;
 } IR_ReceiverNEC_t;
-
 
 #ifdef IR_RECEIVER_NEC_USE_DMA
     // TIM2_CH1 -> PD2 -> DMA1_CH2
