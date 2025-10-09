@@ -22,8 +22,9 @@
 #include "fun_base.h"
 #include "fun_crc.h"
 
-
 #define IR_RECEIVER_TIMEOUT_US 300000	// 300ms
+
+// #define IR_RECEIVER_DEBUG_LOG
 
 // uncomment to show cycle log
 // #define IR_RECEIVER_CYCLE_LOG
@@ -33,7 +34,7 @@
 	#define IR_SENDER_LOGICAL_1_US 550
 	#define IR_SENDER_LOGICAL_0_US 300
 #else
-	#define IR_RECEIVER_HIGH_THRESHOLD 1900
+	#define IR_RECEIVER_HIGH_THRESHOLD 2200
 	#define IR_SENDER_LOGICAL_1_US 1600
 	#define IR_SENDER_LOGICAL_0_US 560
 #endif
@@ -42,9 +43,21 @@
 //! RECEIVE FUNCTIONS USING GPIO
 //! ####################################
 
+#ifdef IR_RECEIVER_DEBUG_LOG
+	u16 DEBUG_BUFFER[100] = {0};
+
+	Debug_Buffer_t debug_buffer = {
+		.buf = DEBUG_BUFFER,
+		.buf_idx = 0,
+		.buf_len = 100
+	};
+#endif
+
+#define IR_RECEIVER_BITBUFFER_LEN 16
+
 typedef struct {
 	u8 pin;
-	u16 BIT_BUFFER[16];
+	u16 BIT_BUFFER[IR_RECEIVER_BITBUFFER_LEN];
 	u16 bit_buf_idx;
 	u8 prev_state, current_state;
 	u32 time_ref, timeout_ref;
@@ -77,10 +90,15 @@ void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u16*, u16))
 	model->prev_state = model->current_state;
 
 	//! Reset values
-	memset(model->BIT_BUFFER, 0, sizeof(model->BIT_BUFFER));
+	memset(model->BIT_BUFFER, 0, IR_RECEIVER_BITBUFFER_LEN * sizeof(u16));
 	model->bit_buf_idx = 0;
-	memset(model->WORD_BUFFER, 0, sizeof(model->WORD_BUFFER));
+	memset(model->WORD_BUFFER, 0, model->WORD_BUFFER_LEN * sizeof(u16));
 	model->word_idx = 0;
+
+	//# Debug log
+	#ifdef IR_RECEIVER_DEBUG_LOG
+		UTIL_DebugBuffer_flush(&debug_buffer);
+	#endif
 }
 
 //* TASK FUNCTION
@@ -106,6 +124,11 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 
 			//# STEP 2: collect data
 			model->BIT_BUFFER[model->bit_buf_idx] = elapsed;
+
+			//# Debug log
+			#ifdef IR_RECEIVER_DEBUG_LOG
+				UTIL_DebugBuffer_addValue(&debug_buffer, elapsed);
+			#endif
 
 			// handle bit shifting
 			u16 delta_1 = abs(IR_SENDER_LOGICAL_1_US - elapsed);

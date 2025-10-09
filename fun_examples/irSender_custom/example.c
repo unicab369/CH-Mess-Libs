@@ -38,17 +38,17 @@ int main() {
 
 			static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111 };
 			// fun_irSender_sendNEC_blocking(data_out, 4);
-			// fun_irSend_CustomTestData();
+			fun_irSend_CustomTestData();
 
-			irSender.BUFFER = data_out;
-			irSender.BUFFER_LEN = 4;
+			// irSender.BUFFER = data_out;
+			// irSender.BUFFER_LEN = 4;
 
-			fun_irSender_asyncSend(&irSender);
+			// fun_irSender_asyncSend(&irSender);
 
 			printf("messages in %d ms\r\n", millis() - ref);
 			time_ref = millis();
 		}
 
-		fun_irSender_asyncTask(&irSender);
+		// fun_irSender_asyncTask(&irSender);
 	}
 }

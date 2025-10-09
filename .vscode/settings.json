@@ -8,5 +8,6 @@
         "systick_irq.h": "c",
         "fun_crc.h": "c",
         "fun_irreceiver.h": "c"
-    }
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

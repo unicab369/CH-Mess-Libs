@@ -243,6 +243,9 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				model->logical_spacing = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
 				model->remaining_data_bits--;
 				model->time_ref = micros();		//! REQUIRES new micros() bc carrier pulse is blocking
+				
+				// // Bypassing for STEP 4
+				// Delay_Us(model->logical_spacing);
 
 				if (model->remaining_data_bits == 0) {
 					model->remaining_data_bits = IR_DATA_BITs_LEN; // reload remaining data bits
@@ -251,11 +254,10 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			}
 			else {
 				//# STEP 4: DONE - terminating signal
-				// PWM_ON();
-				// Delay_Us(NEC_LOGIC_0_WIDTH_US);
-				// PWM_OFF();
+				PWM_ON();
+				Delay_Us(NEC_LOGIC_0_WIDTH_US);
+				PWM_OFF();
 				model->state = IR_Idle;
-				model->output_state = 0;
 			}
 			break;
 

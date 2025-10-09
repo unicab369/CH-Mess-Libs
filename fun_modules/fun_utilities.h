@@ -98,3 +98,35 @@ u8 fun_thresholdBuffer_addUpperValue(Threshold_Buffer_t *info, u32 value) {
     info->buf_idx++;
     return 1;
 }
+
+
+typedef struct {
+    u16 *buf;
+    u16 buf_idx;
+    u16 buf_len;
+} Debug_Buffer_t;
+
+void UTIL_DebugBuffer_clear(Debug_Buffer_t *model) {
+    memset(model->buf, 0, sizeof(u16) * model->buf_len);
+    model->buf_idx = 0;
+}
+
+void UTIL_DebugBuffer_flush(Debug_Buffer_t *model) {
+    if (model->buf_idx < 1) return;
+    printf("\nDEBUG BUFFER\n");
+
+    for (int i = 0; i < model->buf_idx; i++) {
+        u8 bit = model->buf[i] > 1000;
+        printf("[%3d] %d \t%d\n", i, model->buf[i], bit);
+        if (i%8 == 7) printf("\n");
+    }
+    printf("\n");
+
+    UTIL_DebugBuffer_clear(model);
+}
+
+void UTIL_DebugBuffer_addValue(Debug_Buffer_t *model, u16 value) {
+    if (model->buf_idx + 1 >= model->buf_len) return;
+    model->buf[model->buf_idx] = value;
+    model->buf_idx++;
+}
