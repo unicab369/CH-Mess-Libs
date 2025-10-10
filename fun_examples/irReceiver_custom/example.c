@@ -1,5 +1,3 @@
-#define IR_RECEIVER_FAST_MODE
-
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
@@ -31,14 +29,13 @@ int main() {
 	funGpioInitAll();
 
 	printf("\r\nIR Receiver Test.\r\n");
-	printf("Receiver High Threshold: %d\r\n", IR_RECEIVER_HIGH_THRESHOLD);
 
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
 		.WORD_BUFFER_LEN = MAX_WORDS_LEN,
 		.WORD_BUFFER = WORD_BUFFER,
-		.IR_MODE = 0
-		// .IR_MODE = 1
+		// .IR_MODE = 0				// NEC protocol
+		.IR_MODE = 1				// NfS protocol
 	};
 
 	fun_irReceiver_init(&receiver);

@@ -23,10 +23,8 @@
 #include "fun_base.h"
 #include "fun_crc.h"
 
-
 // #define IR_SENDER_DEBUGLOG 0
 
-#define IR_USE_TIM1_PWM
 
 // Enable/disable PWM carrier
 static inline void PWM_ON(void)  { TIM1->CCER |=  TIM_CC1NE; }
@@ -36,39 +34,30 @@ static inline void PWM_OFF(void) { TIM1->CCER &= ~TIM_CC1NE; }
 //! SETUP FUNCTION
 //! ####################################
 
-u8 irSender_pin;
-
 u8 fun_irSender_init(u8 pin) {
-	irSender_pin = pin;
+	funPinMode(pin, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF);
 
-	#ifdef IR_USE_TIM1_PWM
-		funPinMode(irSender_pin, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF);
-
-		// Enable TIM1
-		RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
-			
-		// Reset TIM1 to init all regs
-		RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
-		RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
+	// Enable TIM1
+	RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
 		
-		// PWM settings
-		TIM1->PSC = 0x0000;			// Prescaler 
-		TIM1->ATRLR = 1263;			// PWM period: 48Mhz/38kHz = 1263
-		TIM1->CH1CVR = 632;			// PWM duty cycle: 50% = 1263/2
-		TIM1->SWEVGR |= TIM_UG;		// Reload immediately
+	// Reset TIM1 to init all regs
+	RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
+	RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
+	
+	// PWM settings
+	TIM1->PSC = 0x0000;			// Prescaler 
+	TIM1->ATRLR = 1263;			// PWM period: 48Mhz/38kHz = 1263
+	TIM1->CH1CVR = 632;			// PWM duty cycle: 50% = 1263/2
+	TIM1->SWEVGR |= TIM_UG;		// Reload immediately
 
-		// CH1 Mode is output, PWM1 (CC1S = 00, OC1M = 110)
-		TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
-		
-		TIM1->BDTR |= TIM_MOE;		// Enable TIM1 outputs
-		TIM1->CTLR1 |= TIM_CEN;		// Enable TIM1
+	// CH1 Mode is output, PWM1 (CC1S = 00, OC1M = 110)
+	TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
+	
+	TIM1->BDTR |= TIM_MOE;		// Enable TIM1 outputs
+	TIM1->CTLR1 |= TIM_CEN;		// Enable TIM1
 
-		TIM1->CCER |= TIM_CC1NP;
-		return 1;
-	#else
-		funPinMode(irSender_pin, GPIO_CFGLR_OUT_50Mhz_PP);
-		return 0;
-	#endif
+	TIM1->CCER |= TIM_CC1NP;
+	return 1;
 }
 
 //! ####################################
@@ -153,7 +142,7 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
 				if (model->IR_MODE == 0) {
 					PWM_ON();
-					Delay_Us(NEC_LOGIC_0_WIDTH_US);
+					Delay_Us(IR_RECEIVER_LOGICAL_0_US);
 					PWM_OFF();
 				}
 				// Custom protocol uses any of the PWM states for LOGICAL value
@@ -179,7 +168,7 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			else {
 				//# STEP 4: DONE - terminating signal
 				PWM_ON();
-				Delay_Us(NEC_LOGIC_0_WIDTH_US);
+				Delay_Us(IR_RECEIVER_LOGICAL_0_US);
 				PWM_OFF();
 				model->state = IR_Idle;
 			}

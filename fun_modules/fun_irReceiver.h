@@ -29,16 +29,6 @@
 // uncomment to show cycle log
 // #define IR_RECEIVER_CYCLE_LOG
 
-#ifdef IR_RECEIVER_FAST_MODE
-	#define IR_RECEIVER_HIGH_THRESHOLD 800
-	// #define IR_SENDER_LOGICAL_1_US 550
-	// #define IR_SENDER_LOGICAL_0_US 300
-#else
-	#define IR_RECEIVER_HIGH_THRESHOLD 2200
-	// #define IR_SENDER_LOGICAL_1_US 1600
-	// #define IR_SENDER_LOGICAL_0_US 560
-#endif
-
 //! ####################################
 //! RECEIVE FUNCTIONS USING GPIO
 //! ####################################
@@ -70,9 +60,9 @@ typedef struct {
 
 Cycle_Info_t ir_cycle;
 
-static u16 IR_SENDER_START_SIGNAL_THRESHOLD_US = 2200;
-static u16 IR_SENDER_LOGICAL_1_US = 1600;
-static u16 IR_SENDER_LOGICAL_0_US = 560;
+static u16 IR_START_SIGNAL_THRESHOLD_US = 2200;
+static u16 IR_LOGICAL_1_US = 1600;
+static u16 IR_LOGICAL_0_US = 560;
 
 //* INIT FUNCTION
 void fun_irReceiver_init(IR_Receiver_t* model) {
@@ -82,14 +72,14 @@ void fun_irReceiver_init(IR_Receiver_t* model) {
 
 	switch (model->IR_MODE) {
 		case 0:
-			IR_SENDER_START_SIGNAL_THRESHOLD_US = 2200;
-			IR_SENDER_LOGICAL_1_US = 1600;
-			IR_SENDER_LOGICAL_0_US = 560;
+			IR_START_SIGNAL_THRESHOLD_US = 2200;
+			IR_LOGICAL_1_US = 1600;
+			IR_LOGICAL_0_US = 560;
 			break;
 		case 1:
-			IR_SENDER_START_SIGNAL_THRESHOLD_US = 800;
-			IR_SENDER_LOGICAL_1_US = 550;
-			IR_SENDER_LOGICAL_0_US = 300;
+			IR_START_SIGNAL_THRESHOLD_US = 800;
+			IR_LOGICAL_1_US = 550;
+			IR_LOGICAL_0_US = 300;
 			break;
 	}
 
@@ -130,7 +120,7 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 		u16 elapsed = moment - model->time_ref;
 
 		//# STEP 1: Filter out high thresholds
-		u8 filter_signal = elapsed < IR_SENDER_START_SIGNAL_THRESHOLD_US;
+		u8 filter_signal = elapsed < IR_START_SIGNAL_THRESHOLD_US;
 
 		// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
 		if (model->IR_MODE == 0) {
@@ -156,8 +146,8 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 			#endif
 
 			// handle bit shifting
-			u16 delta_1 = abs(IR_SENDER_LOGICAL_1_US - elapsed);
-			u16 delta_0 = abs(IR_SENDER_LOGICAL_0_US - elapsed);
+			u16 delta_1 = abs(IR_LOGICAL_1_US - elapsed);
+			u16 delta_0 = abs(IR_LOGICAL_0_US - elapsed);
 			int bit = delta_1 < delta_0;
 
 			u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F);  // &0x0F is %16

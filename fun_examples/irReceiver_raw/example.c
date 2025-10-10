@@ -1,19 +1,14 @@
-// #define IR_RECEIVER_FAST_MODE
-
 #include "../../fun_modules/fun_irReceiver.h"
 
 #define IR_RECEIVER_PIN PD2
 
 #define IR_RECEIVER_PULSES_LEN 400
 
-Threshold_Buffer_t thresholdBuf = {
-	.buf_len = 5,
-	.threshold_limit = IR_RECEIVER_HIGH_THRESHOLD,
-};
-
 MinMax_Info32_t minMax = {0};
 u16 receive_buf[IR_RECEIVER_PULSES_LEN];
 u16 receive_buf_idx;
+
+Threshold_Buffer_t thresholdBuf;
 
 //* PROCESS BUFFER FUNCTION
 void _irReceiver_processBuffer2(IR_Receiver_t *model) {
@@ -31,8 +26,8 @@ void _irReceiver_processBuffer2(IR_Receiver_t *model) {
 
 		for (u16 i = 0; i < receive_buf_idx; i++) {
 			u32 value = receive_buf[i];
-			u16 delta_1 = abs(IR_SENDER_LOGICAL_1_US - value);
-			u16 delta_0 = abs(IR_SENDER_LOGICAL_0_US - value);
+			u16 delta_1 = abs(IR_LOGICAL_1_US - value);
+			u16 delta_0 = abs(IR_LOGICAL_0_US - value);
 			u16 delta_diff = abs(delta_1 - delta_0);
 			int bit = delta_1 < delta_0;
 
@@ -86,7 +81,7 @@ void _irReceiver_task(IR_Receiver_t *model) {
 
 		//# STEP 1: Filter out high thresholds
 		if (!addHighThreshold) {
-			if (elapsed < IR_RECEIVER_HIGH_THRESHOLD) {
+			if (elapsed < IR_START_SIGNAL_THRESHOLD_US) {
 				UTIL_minMax_updateMax(&minMax, elapsed);
 			}
 			UTIL_minMax_updateMin(&minMax, elapsed);
@@ -130,14 +125,19 @@ int main() {
 	funGpioInitAll();
 
 	printf("\r\nIR Receiver Test.\r\n");
-	printf("Receiver High Threshold: %d\r\n", IR_RECEIVER_HIGH_THRESHOLD);
 
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
+		// .IR_MODE = 0				// NEC protocol
+		.IR_MODE = 1				// NfS protocol
 	};
 
 	fun_irReceiver_init(&receiver);
 	UTIL_cycleInfo_clear(&cycle);
+
+	// need to be called affer init for IR_START_SIGNAL_THRESHOLD_US to be assigned
+	thresholdBuf.buf_len = 5;
+	thresholdBuf.threshold_limit = IR_START_SIGNAL_THRESHOLD_US;
 
 	while(1) {
 		_irReceiver_task(&receiver);

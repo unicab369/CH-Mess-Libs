@@ -15,8 +15,8 @@ int main() {
 	u32 time_ref = millis();
 
 	IR_Sender_t irSender = {
-		.IR_MODE = 0
-		// .IR_MODE = 1
+		// .IR_MODE = 0			// NEC protocol
+		.IR_MODE = 1			// NfS1 protocol
 	};
 
 	static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111, 0x2222, 0x3333, 0x4444 };
