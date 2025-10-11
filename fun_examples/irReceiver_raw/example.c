@@ -4,6 +4,10 @@
 
 #define IR_RECEIVER_PULSES_LEN 400
 
+#ifndef ABS
+	#define ABS(x) ((x) < 0 ? -(x) : (x))
+#endif
+
 MinMax_Info32_t minMax = {0};
 u16 receive_buf[IR_RECEIVER_PULSES_LEN];
 u16 receive_buf_idx;
@@ -26,9 +30,9 @@ void _irReceiver_processBuffer2(IR_Receiver_t *model) {
 
 		for (u16 i = 0; i < receive_buf_idx; i++) {
 			u32 value = receive_buf[i];
-			u16 delta_1 = abs(IR_LOGICAL_1_US - value);
-			u16 delta_0 = abs(IR_LOGICAL_0_US - value);
-			u16 delta_diff = abs(delta_1 - delta_0);
+			u16 delta_1 = ABS(IR_LOGICAL_1_US - value);
+			u16 delta_0 = ABS(IR_LOGICAL_0_US - value);
+			u16 delta_diff = ABS(delta_1 - delta_0);
 			int bit = delta_1 < delta_0;
 
 			// find how close the value is to it's 
@@ -95,7 +99,7 @@ void _irReceiver_task(IR_Receiver_t *model) {
 				printf("Max pulses reached: %d\n", receive_buf_idx);
 
 				//# STEP 3: Process Buffer when it's full
-				_irReceiver_processBuffer2(&model);
+				_irReceiver_processBuffer2(model);
 				return;
 			}
 		}
@@ -109,7 +113,7 @@ void _irReceiver_task(IR_Receiver_t *model) {
         timeout_ref = micros();
 
 		//! process the buffer
-		_irReceiver_processBuffer2(&model);
+		_irReceiver_processBuffer2(model);
 		UTIL_cycleInfo_flush(&cycle);
     }
 

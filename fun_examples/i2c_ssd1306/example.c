@@ -100,6 +100,6 @@ int main() {
 		}
 
 		// fun_encoder_tim2_task(moment, &encoder_a, onHandle_Encoder);
-		fun_encoder_gpio_task(moment, &encoder_b);
+		fun_encoder_gpio_task(moment, &encoder_b, onHandle_Encoder);
 	}
 }

@@ -7,7 +7,7 @@
 typedef struct {
     u8 clk_pin;
     u8 dt_pin;
-    u16 value;
+    u8 value;
     u8 last_clk_state;
     u8 last_dt_state;
     u32 last_update_time;
@@ -26,25 +26,25 @@ void fun_encoder_gpio_init(Encoder_GPIO_t *model) {
     model->last_dt_state = funDigitalRead(model->dt_pin);
 }
 
-void fun_encoder_gpio_task(u32 time, Encoder_GPIO_t *model) {
+void fun_encoder_gpio_task(u32 time, Encoder_GPIO_t *model, void (*handler)(u8, int8_t)) {
     //# Ignore changes that happen too quickly (debouncing)
     if (time - model->last_debounce_time < ENCODER_DEBOUNCE_TIME_MS) return;
 
     u8 clk_state = funDigitalRead(model->clk_pin);
     u8 dt_state = funDigitalRead(model->dt_pin);
 
-    //# Check for no state change
+    //# STEP 1: Check for no state change
     if (clk_state == model->last_clk_state && dt_state == model->last_dt_state) return;
 
-    //# Handle readings
+    //# STEP 2: Handle readings
     if (clk_state != model->last_clk_state) {
         int8_t direction = clk_state == dt_state ? -1 : 1;
         model->value = model->value + direction;
 
-        // Trigger the callback if enough time has passed since the last update
+        //# STEP 3:Trigger the callback if enough time has passed since the last update
         if (time - model->last_update_time > ENCODER_TIMEOUT_MS) {
-            printf("pos = %d, direction: %d\n", model->value, direction);
             model->last_update_time = time;
+            handler(model->value, direction);
         }
     }
 
