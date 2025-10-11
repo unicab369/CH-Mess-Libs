@@ -1,6 +1,7 @@
 #include "../../fun_modules/fun_base.h"
 #include "../../fun_modules/fun_i2c/lib/lib_i2c.h"
 #include "../../fun_modules/fun_i2c/fun_ssd1306.h"
+#include "../../fun_modules/fun_encoder.h"
 
 char str_output[SSD1306_MAX_STR_LEN];
 
@@ -11,7 +12,7 @@ i2c_device_t dev_ssd1306 = {
 	.regb = 1,
 };
 
-
+//# SSD1306 INTERFACES
 /* send OLED command byte */
 uint8_t SSD1306_CMD(uint8_t cmd) {
 	uint8_t pkt[2];
@@ -28,6 +29,11 @@ uint8_t SSD1306_DATA(uint8_t *data, int sz) {
 	return i2c_write_raw(&dev_ssd1306, pkt, sz+1);
 }
 
+//# Callbacks
+void onHandle_Encoder(uint8_t position, uint8_t direction) {
+	printf("pos relative: %d, direction: %d\n", position, direction);
+	// mngI2c_load_encoder(millis(), position, direction);
+}
 
 void modI2C_display(const char *str, uint8_t line) {
 	//! validate device before print
@@ -50,6 +56,10 @@ int main() {
 	Delay_Ms(100);
 	funGpioInitAll();
 	
+	//# TIM2: uses PD4(CH1) and PD3(CH2)
+	Encoder_t encoder_a = { 0, 0, 0 };
+	fun_encoder_setup(&encoder_a);
+
 	u32 time_ref = millis();
 	u32 counter = 0;
 
@@ -79,5 +89,7 @@ int main() {
 			// ssd1306_draw_str(str_output, 0, 0);
 			time_ref = millis();
 		}
+
+		fun_encoder_task(&encoder_a, onHandle_Encoder);
 	}
 }

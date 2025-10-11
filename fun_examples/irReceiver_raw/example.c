@@ -128,8 +128,8 @@ int main() {
 
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
-		// .IR_MODE = 0				// NEC protocol
-		.IR_MODE = 1				// NfS protocol
+		.IR_MODE = 0				// NEC protocol
+		// .IR_MODE = 1				// NfS protocol
 	};
 
 	fun_irReceiver_init(&receiver);
