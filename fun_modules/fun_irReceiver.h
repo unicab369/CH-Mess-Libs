@@ -24,6 +24,10 @@
 
 #define IR_RECEIVER_TIMEOUT_US 300000	// 300ms
 
+#ifndef ABS
+	#define ABS(x) ((x) < 0 ? -(x) : (x))
+#endif
+
 // #define IR_RECEIVER_DEBUG_LOG
 
 // uncomment to show cycle log
@@ -146,8 +150,8 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 			#endif
 
 			// handle bit shifting
-			u16 delta_1 = abs(IR_LOGICAL_1_US - elapsed);
-			u16 delta_0 = abs(IR_LOGICAL_0_US - elapsed);
+			u16 delta_1 = ABS(IR_LOGICAL_1_US - elapsed);
+			u16 delta_0 = ABS(IR_LOGICAL_0_US - elapsed);
 			int bit = delta_1 < delta_0;
 
 			u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F);  // &0x0F is %16
