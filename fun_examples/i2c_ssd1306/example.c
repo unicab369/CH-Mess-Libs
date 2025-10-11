@@ -1,7 +1,8 @@
 #include "../../fun_modules/fun_base.h"
 #include "../../fun_modules/fun_i2c/lib/lib_i2c.h"
 #include "../../fun_modules/fun_i2c/fun_ssd1306.h"
-#include "../../fun_modules/fun_encoder.h"
+#include "../../fun_modules/fun_encoder_tim2.h"
+#include "../../fun_modules/fun_encoder_gpio.h"
 
 char str_output[SSD1306_MAX_STR_LEN];
 
@@ -14,34 +15,34 @@ i2c_device_t dev_ssd1306 = {
 
 //# SSD1306 INTERFACES
 /* send OLED command byte */
-uint8_t SSD1306_CMD(uint8_t cmd) {
-	uint8_t pkt[2];
+u8 SSD1306_CMD(u8 cmd) {
+	u8 pkt[2];
 	pkt[0] = 0;
 	pkt[1] = cmd;
 	return i2c_write_raw(&dev_ssd1306, pkt, 2);
 }
 
 /* send OLED data packet (up to 32 bytes) */
-uint8_t SSD1306_DATA(uint8_t *data, int sz) {
-	uint8_t pkt[33];
+u8 SSD1306_DATA(u8 *data, int sz) {
+	u8 pkt[33];
 	pkt[0] = 0x40;
 	memcpy(&pkt[1], data, sz);
 	return i2c_write_raw(&dev_ssd1306, pkt, sz+1);
 }
 
 //# Callbacks
-void onHandle_Encoder(uint8_t position, uint8_t direction) {
-	printf("pos relative: %d, direction: %d\n", position, direction);
+void onHandle_Encoder(u8 position, int8_t direction) {
+	printf("pos: %d, direction: %d\n", position, direction);
 	// mngI2c_load_encoder(millis(), position, direction);
 }
 
-void modI2C_display(const char *str, uint8_t line) {
+void modI2C_display(const char *str, u8 line) {
 	//! validate device before print
 	if (i2c_ping(0x3C) != I2C_OK) return;
 	ssd1306_draw_str(str, line, 0);
 }
 
-void i2c_scan_callback(const uint8_t addr) {
+void i2c_scan_callback(const u8 addr) {
 	if (addr == 0x00 || addr == 0x7F) return; // Skip reserved addresses
 	
 	static int line = 1;
@@ -57,8 +58,14 @@ int main() {
 	funGpioInitAll();
 	
 	//# TIM2: uses PD4(CH1) and PD3(CH2)
-	Encoder_t encoder_a = { 0, 0, 0 };
-	fun_encoder_setup(&encoder_a);
+	Encoder_t encoder_a;
+	// fun_encoder_tim2_init(&encoder_a);
+
+	Encoder_GPIO_t encoder_b = {
+		.clk_pin = PD4,
+		.dt_pin = PD3,
+	};
+	fun_encoder_gpio_init(&encoder_b);
 
 	u32 time_ref = millis();
 	u32 counter = 0;
@@ -81,6 +88,8 @@ int main() {
 	}
 
 	while(1) {
+		u32 moment = millis();
+
 		if ((millis() - time_ref) > 2000) {
 			// test_lines();
 			// ssd1306_drawAll();
@@ -90,6 +99,7 @@ int main() {
 			time_ref = millis();
 		}
 
-		fun_encoder_task(&encoder_a, onHandle_Encoder);
+		// fun_encoder_tim2_task(moment, &encoder_a, onHandle_Encoder);
+		fun_encoder_gpio_task(moment, &encoder_b);
 	}
 }

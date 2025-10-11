@@ -218,8 +218,8 @@ void ssd1306_drawArea(
 
 	for (u8 page = 0; page < SSD1306_PAGES; page++) {
 		// Send page data in chunks
-		for (uint16_t chunk = 0; chunk < col_end; chunk += CHUNK_SIZE) {
-			uint16_t chunk_end = chunk + CHUNK_SIZE;
+		for (u16 chunk = 0; chunk < col_end; chunk += CHUNK_SIZE) {
+			u16 chunk_end = chunk + CHUNK_SIZE;
 			if (chunk_end > col_end) chunk_end = col_end;
 			SSD1306_DATA(&frame_buffer[page][chunk], chunk_end - chunk);
 		}
@@ -371,12 +371,12 @@ void render_line(M_Point p0, M_Point p1, u8 thickness) {
 	p1.y = (p1.y < SSD1306_H) ? p1.y : SSD1306_H_LIMIT;
 
 	// Bresenham's line algorithm
-	int16_t dx = abs(p1.x - p0.x);
-	int16_t dy = -abs(p1.y - p0.y);
-	int16_t sx = p0.x < p1.x ? 1 : -1;
-	int16_t sy = p0.y < p1.y ? 1 : -1;
-	int16_t err = dx + dy;
-	int16_t e2;
+	u16 dx = abs(p1.x - p0.x);
+	u16 dy = -abs(p1.y - p0.y);
+	u16 sx = p0.x < p1.x ? 1 : -1;
+	u16 sy = p0.y < p1.y ? 1 : -1;
+	u16 err = dx + dy;
+	u16 e2;
 
 	// Prerender these before the loop:
 	u8 *fb_base = &frame_buffer[0][0];
@@ -460,7 +460,7 @@ void render_solid_poly(M_Point *pts, u8 num_pts) {
 	// ===== [1] EDGE EXTRACTION =====
 	struct Edge {
 		u8 y_start, y_end;
-		int16_t x_start, dx_dy;
+		u16 x_start, dx_dy;
 	} edges[num_pts];
 
 	u8 edge_count = 0;
@@ -473,7 +473,7 @@ void render_solid_poly(M_Point *pts, u8 num_pts) {
 
 		// Determine edge direction
 		u8 y0, y1;
-		int16_t x0;
+		u16 x0;
 		if (pts[i].y < pts[j].y) {
 			y0 = pts[i].y; y1 = pts[j].y;
 			x0 = pts[i].x;
@@ -541,8 +541,8 @@ void render_rect(
 	if (p0.x >= SSD1306_W || p0.y >= SSD1306_H) return;
 
 	// Clamp to display bounds
-	uint16_t x_end = p0.x + area.w;
-	uint16_t y_end = p0.y + area.h;
+	u16 x_end = p0.x + area.w;
+	u16 y_end = p0.y + area.h;
 	if (x_end >= SSD1306_W) area.w = SSD1306_W_LIMIT - p0.x;
 	if (y_end >= SSD1306_H) area.h = SSD1306_H_LIMIT - p0.y;
 
@@ -600,10 +600,10 @@ void render_circle(
 	// Validate center coordinates
 	if (p0.x >= SSD1306_W || p0.y >= SSD1306_H) return;
 
-	int16_t x = -radius;
-	int16_t y = 0;
-	int16_t err = 2 - 2 * radius;
-	int16_t e2;
+	u16 x = -radius;
+	u16 y = 0;
+	u16 err = 2 - 2 * radius;
+	u16 e2;
 
 	do {
 		// Calculate endpoints with clamping
@@ -647,8 +647,8 @@ void render_circle(
 
 // Helper function to get circle point using SIN_LUT
 static void get_circle_point(
-	M_Point center, u8 radius, int16_t angle, 
-	int16_t *x, int16_t *y
+	M_Point center, u8 radius, u16 angle, 
+	u16 *x, u16 *y
 ) {
 	u8 quadrant = angle / 90;
 	u8 reduced_angle = angle % 90;
@@ -672,7 +672,7 @@ static void get_circle_point(
 }
 
 //# render pie
-void render_pie(M_Point center, u8 radius, int16_t start_angle, int16_t end_angle) {	
+void render_pie(M_Point center, u8 radius, u16 start_angle, u16 end_angle) {	
 	// Draw center point
 	render_pixel(center.x, center.y);
 	
@@ -686,8 +686,8 @@ void render_pie(M_Point center, u8 radius, int16_t start_angle, int16_t end_angl
 	u8 step = (radius > 40) ? 2 : 1;
 	
 	// Draw radial lines
-	int16_t angle = start_angle;
-	int16_t x, y;
+	u16 angle = start_angle;
+	u16 x, y;
 
 	while (1) {
 		// Calculate edge point
@@ -713,7 +713,7 @@ void render_pie(M_Point center, u8 radius, int16_t start_angle, int16_t end_angl
 //# render ring (Bresenham's algorithm)
 void render_ring(
 	M_Point p0, u8 radius, u8 thickness,
-	int16_t start_angle, int16_t end_angle
+	u16 start_angle, u16 end_angle
 ) {
 	// Early exit if center is off-screen or radius is 0
 	if ((p0.x >= SSD1306_W) | (p0.y >= SSD1306_H) | (radius == 0)) return;
@@ -723,21 +723,21 @@ void render_ring(
 
 	// Draw concentric circles (outer to inner)
 	for (u8 r = radius; r >= inner_r; r--) {
-		int16_t x = -r;
-		int16_t y = 0;
-		int16_t err = 2 - 2 * r;
+		u16 x = -r;
+		u16 y = 0;
+		u16 err = 2 - 2 * r;
 		
 		do {
 			// Calculate and clamp coordinates with 1-pixel extension
-			int16_t x_start = p0.x + x;
-			int16_t x_end   = p0.x - x;
-			int16_t y_top	= p0.y - y;
-			int16_t y_bottom = p0.y + y;
+			u16 x_start = p0.x + x;
+			u16 x_end   = p0.x - x;
+			u16 y_top	= p0.y - y;
+			u16 y_bottom = p0.y + y;
 
 			// //! Fill out 2 extra pixels besides x to make ensure no missing
 			// //! pixel when drawing the circles
-			int16_t x_left  = x_start - 1;
-			int16_t x_right = x_end + 1;
+			u16 x_left  = x_start - 1;
+			u16 x_right = x_end + 1;
 
 			// Skip pixels outside valid screen bounds
 			if (y_top >= 0 && y_top < SSD1306_H) {
@@ -761,7 +761,7 @@ void render_ring(
 			}
 
 			// Optimized Bresenham step
-			int16_t e2 = err;
+			u16 e2 = err;
 			if (e2 <= y) err += ++y * 2 + 1;  // y*2+1
 			if (e2 > x)  err += ++x * 2 + 1;  // x*2+1
 		} while (x <= 0);

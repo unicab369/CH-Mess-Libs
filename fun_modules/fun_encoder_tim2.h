@@ -2,8 +2,12 @@
 #include <stdio.h>
 
 typedef struct {
-	uint16_t INITIAL_timer_count;		// initial count
-	uint16_t LAST_timer_count;			// previous count
+	u16 INITIAL_timer_count;		// initial count
+	u16 LAST_timer_count;			// previous count
+	u16 encoder_count;
+
+	u32 debounce_timeRef;			// debounce ref
+	u32 debounce_timeout_ms;
 } Encoder_t;
 
 
@@ -31,7 +35,7 @@ typedef struct {
 */
 
 //! Expected funGpioInitAll() before init
-void fun_encoder_setup(Encoder_t *model) {
+void fun_encoder_tim2_init(Encoder_t *model) {
 	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
 
 	//! TIM2 remap mode
@@ -64,19 +68,23 @@ void fun_encoder_setup(Encoder_t *model) {
 
 	model->INITIAL_timer_count = TIM2->CNT;
 	model->LAST_timer_count = TIM2->CNT;
+	model->encoder_count = 0;
+	model->debounce_timeout_ms = 200;
 };
 
-static uint32_t encoder_debounceTime = 0;
+void fun_encoder_tim2_task(u32 time, Encoder_t *model, void (*handler)(u8, int8_t)) {
+	if (time - model->debounce_timeRef < model->debounce_timeout_ms) { return; }
+	model->debounce_timeRef = time;
 
-void fun_encoder_task(Encoder_t *model, void (*handler)(uint8_t, uint8_t)) {
-	uint16_t NEW_timer_count = TIM2->CNT;
+	u16 NEW_timer_count = TIM2->CNT;
 
 	if (NEW_timer_count != model->LAST_timer_count) {
 		u8 relative_pos = NEW_timer_count - model->INITIAL_timer_count;
-		u8 direction	= model->LAST_timer_count > NEW_timer_count;
+		int8_t direction = (model->LAST_timer_count < NEW_timer_count) ? 1 : -1;
 		// u8 delta		= NEW_timer_count - model->LAST_timer_count;
+		model->encoder_count += direction;
 
-		handler(relative_pos, direction);
+		handler(model->encoder_count, direction);
 		model->LAST_timer_count = NEW_timer_count;
 	}
 }
