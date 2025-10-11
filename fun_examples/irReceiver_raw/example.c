@@ -29,7 +29,7 @@ void _irReceiver_processBuffer2(IR_Receiver_t *model) {
 		u16 word = 0x0000;
 
 		for (u16 i = 0; i < receive_buf_idx; i++) {
-			u32 value = receive_buf[i];
+			s16 value = receive_buf[i];
 			u16 delta_1 = ABS(IR_LOGICAL_1_US - value);
 			u16 delta_0 = ABS(IR_LOGICAL_0_US - value);
 			u16 delta_diff = ABS(delta_1 - delta_0);
