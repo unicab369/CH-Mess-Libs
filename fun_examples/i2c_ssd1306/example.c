@@ -81,8 +81,11 @@ int main() {
 			// sprintf(str_output, "Hello Bee %ld", counter);
 			// ssd1306_draw_str(str_output, 0, 0);
 
-			ssd1306_test_lines();
+			time_ref = millis();
+			ssd1306_draw_test();
 			ssd1306_drawAll();
+		
+			printf("elapsed: %d ms\n", millis() - time_ref);
 		}
 
 		// Scan the I2C Bus, prints any devices that respond
