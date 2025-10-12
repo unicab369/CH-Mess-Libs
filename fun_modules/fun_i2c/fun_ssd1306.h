@@ -217,15 +217,6 @@ void ssd1306_drawArea(
 ) {
 	ssd1306_setwindow(start_page, end_page, col_start, col_end-1);
 
-	// for (u8 page = 0; page < SSD1306_PAGES; page++) {
-	// 	// Send page data in chunks
-	// 	for (u16 chunk = 0; chunk < col_end; chunk += CHUNK_SIZE) {
-	// 		u16 chunk_end = chunk + CHUNK_SIZE;
-	// 		if (chunk_end > col_end) chunk_end = col_end;
-	// 		SSD1306_DATA(&frame_buffer[page][chunk], chunk_end - chunk);
-	// 	}
-	// }
-
     for (u8 page = start_page; page <= end_page; page++) {
         // Calculate the base address for this page in the 1D array
         u8* page_base = &frame_buffer[page * SSD1306_W + col_start];
@@ -253,6 +244,24 @@ void ssd1306_fill(u8 value) {
 //! LINE FUNCTIONS
 //! ####################################
 
+#define SORT_LIMITS(limits) \
+    if ((limits)[0] > (limits)[1]) { \
+        u8 temp = (limits)[0]; \
+        (limits)[0] = (limits)[1]; \
+        (limits)[1] = temp; \
+    }
+
+#define MIRROR_VALUES(values, max) \
+	(values)[0] = max - (values)[0]; \
+	(values)[1] = max - (values)[1];
+
+#define CLAMP_VALUE(value, max) \
+	if (value > max) value = max;
+
+#define CLAMP_VALUES(value0, value1, max) \
+	if (value0 > max) value0 = max; \
+	if (value1 > max) value1 = max;
+
 //# render pixel
 void render_pixel(u8 x, u8 y) {
 	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
@@ -262,60 +271,48 @@ void render_pixel(u8 x, u8 y) {
 
 //# render_fastHorLine
 void render_fastHorLine(u8 y, u8 x0, u8 x1) {
-	if (y >= SSD1306_H) return;
+	if (y > SSD1306_H_LIMIT) return;
 	
 	// Clamp x-coordinates
-	if (x0 >= SSD1306_W) x0 = SSD1306_W_LIMIT;
-	if (x1 >= SSD1306_W) x1 = SSD1306_W_LIMIT;
+	CLAMP_VALUES(x0, x1, SSD1306_W_LIMIT);
 
 	M_Page_Mask mask = page_masks[y];
 	u8* row_start = &frame_buffer[mask.page * SSD1306_W];
 
 	for (u8 x = x0; x <= x1; x++) {
-		// frame_buffer[mask.page][x] |= mask.bitmask;
 		row_start[x] |= mask.bitmask;
 	}
 }
 
 //# render horizontal line
 void render_horLine(
-	u8 y, u8 x_limit[2], u8 thickness, u8 mirror
+	u8 y, u8 x_limits[2], u8 thickness, u8 mirror
 ) {
 	// Validate coordinates
-	if (y >= SSD1306_H) return;
+	if (y > SSD1306_H_LIMIT) return;
 
 	// Clamp to display bounds
-	if (x_limit[0] >= SSD1306_W) x_limit[0] = SSD1306_W_LIMIT;
-	if (x_limit[1] >= SSD1306_W) x_limit[1] = SSD1306_W_LIMIT;
+	CLAMP_VALUES(x_limits[0], x_limits[1], SSD1306_W_LIMIT);
 	
 	// Handle mirroring
 	if (mirror) {
-		x_limit[0] = SSD1306_W_LIMIT - x_limit[0];
-		x_limit[1] = SSD1306_W_LIMIT - x_limit[1];
+		MIRROR_VALUES(x_limits, SSD1306_W_LIMIT);
 	}
 
 	// Ensure x1 <= x2 (swap if needed)
-	if (x_limit[0] > x_limit[1]) {
-		u8 temp = x_limit[0];
-		x_limit[0] = x_limit[1];
-		x_limit[1] = temp;
-	}
+	SORT_LIMITS(x_limits);
 
 	// Handle thickness
 	u8 y_end  = y + thickness - 1;
-	if (y_end >= SSD1306_H) y_end = SSD1306_H_LIMIT;
+	CLAMP_VALUE(y_end, SSD1306_H_LIMIT);
 	if (y_end < y) return;  // Skip if thickness is 0 or overflowed
 
 	// Draw thick line
+	u8 width = x_limits[1] - x_limits[0] + 1;
+
 	for (u8 y_pos = y; y_pos <= y_end ; y_pos++) {
 		M_Page_Mask mask = page_masks[y_pos];
-
-		// for (u8 x_pos = x_limit[0]; x_pos <= x_limit[1]; x_pos++) {
-		// 	frame_buffer[mask.page][x_pos] |= mask.bitmask;
-		// }
-
-		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x_limit[0]];
-        u8 width = x_limit[1] - x_limit[0] + 1;
+		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x_limits[0]];
 
         for (u8 i = 0; i < width; i++) {
             row_start[i] |= mask.bitmask;
@@ -325,53 +322,32 @@ void render_horLine(
 
 //# render vertical line
 void render_verLine(
-	u8 x, u8 y_limit[2], u8 thickness, u8 mirror
+	u8 x, u8 y_limits[2], u8 thickness, u8 mirror
 ) {
 	// Validate coordinates
-	if (x >= SSD1306_W) return;
+	if (x > SSD1306_W_LIMIT) return;
 
 	// Clamp to display bounds
-	if (y_limit[0] >= SSD1306_H) y_limit[0] = SSD1306_H_LIMIT;
-	if (y_limit[1] >= SSD1306_H) y_limit[1] = SSD1306_H_LIMIT;
+	CLAMP_VALUES(y_limits[0], y_limits[1], SSD1306_H_LIMIT);
 
 	// Handle mirroring
 	if (mirror) {
-		y_limit[0] = SSD1306_H_LIMIT - y_limit[0];
-		y_limit[1] = SSD1306_H_LIMIT - y_limit[1];
+		MIRROR_VALUES(y_limits, SSD1306_H_LIMIT);
 	}
 
 	// Ensure y1 <= y2 (swap if needed)
-	if (y_limit[0] > y_limit[1]) {
-		u8 temp = y_limit[0];
-		y_limit[0] = y_limit[1];
-		y_limit[1] = temp;
-	}
+	SORT_LIMITS(y_limits);
 
 	// Handle thickness
 	u8 x_end = x + thickness - 1;
-	if (x_end >= SSD1306_W) x_end = SSD1306_W_LIMIT;
+	CLAMP_VALUE(x_end, SSD1306_W_LIMIT);
 	if (x_end < x) return;  // Skip if thickness causes overflow
-
-	// // Draw vertical line with thickness
-	// for (u8 y_pos = y_limit[0]; y_pos <= y_limit[1]; y_pos++) {
-	//	 M_Page_Mask mask = page_masks[y_pos];
-		
-	//	 for (u8 x_pos = x; x_pos <= x_end; x_pos++) {
-	//		 frame_buffer[mask.page][x_pos] |= mask.bitmask;
-	//	 }
-	// }
-
-	// Handle thickness ?? for 1D array?
-    // u8 x_end = x + thickness - 1;
-    // if (x_end >= SSD1306_W) x_end = SSD1306_W_LIMIT;
-    // if (x_end < x) return;
 
 	//# Optimized: save 500-700 us
 	u8 x_len = x_end - x + 1;  // Prerender length
 
-	for (u8 y_pos = y_limit[0]; y_pos <= y_limit[1]; y_pos++) {
+	for (u8 y_pos = y_limits[0]; y_pos <= y_limits[1]; y_pos++) {
 		M_Page_Mask mask = page_masks[y_pos];
-		// u8* row_start = &frame_buffer[mask.page][x];  	// Get row pointer
 		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x];
 
 		for (u8 i = 0; i < x_len; i++) {
@@ -390,10 +366,8 @@ typedef struct {
 //# render line (Bresenham's algorithm)
 void render_line(M_Point p0, M_Point p1, u8 thickness) {
 	// Clamp coordinates to display bounds
-	p0.x = (p0.x < SSD1306_W) ? p0.x : SSD1306_W_LIMIT;
-	p0.y = (p0.y < SSD1306_H) ? p0.y : SSD1306_H_LIMIT;
-	p1.x = (p1.x < SSD1306_W) ? p1.x : SSD1306_W_LIMIT;
-	p1.y = (p1.y < SSD1306_H) ? p1.y : SSD1306_H_LIMIT;
+	CLAMP_VALUES(p0.x, p1.x, SSD1306_W_LIMIT);
+	CLAMP_VALUES(p0.y, p1.y, SSD1306_H_LIMIT);
 
 	// Bresenham's line algorithm
 	s16 dx = ABS(p1.x - p0.x);
@@ -403,47 +377,40 @@ void render_line(M_Point p0, M_Point p1, u8 thickness) {
 	s16 err = dx + dy;
 	s16 e2;
 
-	// Prerender these before the loop:
-	// u8 *fb_base = &frame_buffer[0][0];
-	u8 radius = thickness >> 1; 		// thickness/2 via bit shift
-
 	while (1) {
 		// Draw the pixel(s)
 		if (thickness == 1) {
 			// Fast path for single-pixel
 			if (p0.x < SSD1306_W && p0.y < SSD1306_H) {
 				M_Page_Mask mask = page_masks[p0.y];
-				// frame_buffer[mask.page][p0.x] |= mask.bitmask;
 				frame_buffer[mask.page * SSD1306_W + p0.x] |= mask.bitmask;
 			}
 		} else {
-			u8 x_end = p0.x + radius;
-			u8 y_end = p0.y + radius;
-
 			// Calculate bounds (branchless min/max)
-			u8 x_start = p0.x > radius ? p0.x - radius : 0;
-			u8 y_start = p0.y > radius ? p0.y - radius : 0;
-
-			if (x_end > SSD1306_W_LIMIT) x_end = SSD1306_W_LIMIT;
-			if (y_end > SSD1306_H_LIMIT) y_end = SSD1306_H_LIMIT;
+			u8 x_start = p0.x;
+			u8 x_end = p0.x + thickness - 1;
+			u8 y_start = p0.y;
+			u8 y_end = p0.y + thickness - 1;
+			
+			CLAMP_VALUE(x_end, SSD1306_W_LIMIT);
+			CLAMP_VALUE(y_end, SSD1306_H_LIMIT);
 			u8 width = x_end - x_start + 1;
 
 			// Optimized row filling
 			for (u8 y = y_start; y <= y_end; y++) {
 				M_Page_Mask mask = page_masks[y];
-				// u8 *row = fb_base + (mask.page * SSD1306_W) + x_start;
 				u8* row = &frame_buffer[mask.page * SSD1306_W + x_start];
-				
+				u8 pattern = mask.bitmask;
+
 				// Optimized filling based on width
 				if (width <= 4) {
 					// Fully unrolled for common cases
-					if (width > 0) row[0] |= mask.bitmask;
-					if (width > 1) row[1] |= mask.bitmask;
-					if (width > 2) row[2] |= mask.bitmask;
-					if (width > 3) row[3] |= mask.bitmask;
+					if (width > 0) row[0] |= pattern;
+					if (width > 1) row[1] |= pattern;
+					if (width > 2) row[2] |= pattern;
+					if (width > 3) row[3] |= pattern;
 				} else {
 					// For larger widths, use memset-style optimization
-					u8 pattern = mask.bitmask;
 					for (u8 i = 0; i < width; i++) {
 						row[i] |= pattern;
 					}
@@ -479,6 +446,8 @@ void render_lines(M_Point *pts, u8 num_pts, u8 thickness) {
 void render_poly(M_Point *pts, u8 num_pts, u8 thickness) {
 	if (num_pts < 3) return;  // Need at least 3 points for a polygon
 	render_lines(pts, num_pts, thickness);
+
+	// Draw closing line
 	render_line(pts[num_pts-1], pts[0], thickness);
 }
 
@@ -580,7 +549,6 @@ void render_rect(
 	}
 
 	// Draw rectangle with optional fill
-	// Limit hLimit = { l0: p0.x, l1: x_end };
 	u8 x_limit[] = { p0.x, x_end };
 
 	if (fill) {
@@ -589,7 +557,6 @@ void render_rect(
 			render_horLine(y_pos, x_limit, 1, 0);
 		}
 	} else {
-		// Limit vLimit = { l0: p0.y + 1, l1: y_end - 1 };
 		u8 y_limit[] = { p0.y + 1, y_end - 1 };
 
 		// Outline only
@@ -927,8 +894,8 @@ void _test_lines() {
 	// //# hor-ver lines
 	// for(int8_t i = 0; i<sizeof(myvalues); i++) {
 	// 	u8 limit[] = { 0, myvalues[i] };
-	// 	render_horLine(y, limit, 1, 0);
-	// 	render_horLine(y, limit, 1, 1);
+	// 	// render_horLine(y, limit, 2, 0);
+	// 	// render_horLine(y, limit, 2, 1);
 	// 	render_verLine(y, limit, 1, 0);
 	// 	render_verLine(y, limit, 1, 1);
 	// 	y += 4;
@@ -938,22 +905,21 @@ void _test_lines() {
 	for(u8 x=0; x<SSD1306_W; x+=16) {
 		M_Point point_a0 = { x: x, y: 0 };
 		M_Point point_a1 = { x: SSD1306_W, y: y };
-		render_line(point_a0, point_a1, 1);
+		render_line(point_a0, point_a1, 2);
 
 		M_Point point_b0 = { x: SSD1306_W-x, y: SSD1306_H };
 		M_Point point_b1 = { x: 0, y: SSD1306_H-y };
-		render_line(point_b0, point_b1, 1);
+		render_line(point_b0, point_b1, 2);
 
 		y+= SSD1306_H/8;
 	}
-	printf("IM DONE\n");
 }
 
 
 void ssd1306_draw_test() {
-	test_polys();
-	test_circles();
-	// _test_lines();
+	// test_polys();
+	// test_circles();
+	_test_lines();
 
 	// ssd1306_vertical_line(&line, 2, 0);
 

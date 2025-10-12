@@ -48,7 +48,7 @@ void i2c_scan_callback(const u8 addr) {
 	static int line = 1;
 	sprintf(str_output, "I2C: 0x%02X", addr);
 	printf("%s\n", str_output);
-	// modI2C_display(str_output, line++);
+	modI2C_display(str_output, line++);
 }
 
 int main() {
