@@ -364,16 +364,16 @@ typedef struct {
 } M_Point;
 
 //# render line (Bresenham's algorithm)
-void render_line(M_Point p0, M_Point p1, u8 thickness) {
+void render_line(u8 p0[2], u8 p1[2], u8 thickness) {
 	// Clamp coordinates to display bounds
-	CLAMP_VALUES(p0.x, p1.x, SSD1306_W_LIMIT);
-	CLAMP_VALUES(p0.y, p1.y, SSD1306_H_LIMIT);
+	CLAMP_VALUES(p0[0], p1[0], SSD1306_W_LIMIT);
+	CLAMP_VALUES(p0[1], p1[1], SSD1306_H_LIMIT);
 
 	// Bresenham's line algorithm
-	s16 dx = ABS(p1.x - p0.x);
-	s16 dy = -ABS(p1.y - p0.y);
-	s16 sx = p0.x < p1.x ? 1 : -1;
-	s16 sy = p0.y < p1.y ? 1 : -1;
+	s16 dx = ABS(p1[0] - p0[0]);
+	s16 dy = -ABS(p1[1] - p0[1]);
+	s16 sx = p0[0] < p1[0] ? 1 : -1;
+	s16 sy = p0[1] < p1[1] ? 1 : -1;
 	s16 err = dx + dy;
 	s16 e2;
 
@@ -381,16 +381,16 @@ void render_line(M_Point p0, M_Point p1, u8 thickness) {
 		// Draw the pixel(s)
 		if (thickness == 1) {
 			// Fast path for single-pixel
-			if (p0.x < SSD1306_W && p0.y < SSD1306_H) {
-				M_Page_Mask mask = page_masks[p0.y];
-				frame_buffer[mask.page * SSD1306_W + p0.x] |= mask.bitmask;
+			if (p0[0] < SSD1306_W && p0[1] < SSD1306_H) {
+				M_Page_Mask mask = page_masks[p0[1]];
+				frame_buffer[mask.page * SSD1306_W + p0[0]] |= mask.bitmask;
 			}
 		} else {
 			// Calculate bounds (branchless min/max)
-			u8 x_start = p0.x;
-			u8 x_end = p0.x + thickness - 1;
-			u8 y_start = p0.y;
-			u8 y_end = p0.y + thickness - 1;
+			u8 x_start = p0[0];
+			u8 x_end = p0[0] + thickness - 1;
+			u8 y_start = p0[1];
+			u8 y_end = p0[1] + thickness - 1;
 			
 			CLAMP_VALUE(x_end, SSD1306_W_LIMIT);
 			CLAMP_VALUE(y_end, SSD1306_H_LIMIT);
@@ -419,10 +419,10 @@ void render_line(M_Point p0, M_Point p1, u8 thickness) {
 		}
 
 		// Bresenham Advance
-		if (p0.x == p1.x && p0.y == p1.y) break;
+		if (p0[0] == p1[0] && p0[1] == p1[1]) break;
 		e2 = err << 1; // e2 = 2*err via bit shift
-		if (e2 >= dy) { err += dy; p0.x += sx; }
-		if (e2 <= dx) { err += dx; p0.y += sy; }
+		if (e2 >= dy) { err += dy; p0[0] += sx; }
+		if (e2 <= dx) { err += dx; p0[1] += sy; }
 	}
 }
 
@@ -432,23 +432,27 @@ void render_line(M_Point p0, M_Point p1, u8 thickness) {
 //! ####################################
 
 //# render lines
-void render_lines(M_Point *pts, u8 num_pts, u8 thickness) {
+void render_multiple_lines(M_Point *pts, u8 num_pts, u8 thickness) {
 	// Early exit if not enough points (need at least 2 points for a line)
 	if (num_pts < 2) return;
 	
 	// Draw connected lines between all points
 	for (u8 i = 0; i < num_pts - 1; i++) {
-		render_line(pts[i], pts[i+1], thickness);
+		u8 p0[] = {pts[i].x, pts[i].y};
+		u8 p1[] = {pts[i+1].x, pts[i+1].y};
+		render_line(p0, p1, thickness);
 	}
 }
 
 //# render poligon
 void render_poly(M_Point *pts, u8 num_pts, u8 thickness) {
 	if (num_pts < 3) return;  // Need at least 3 points for a polygon
-	render_lines(pts, num_pts, thickness);
+	render_multiple_lines(pts, num_pts, thickness);
 
 	// Draw closing line
-	render_line(pts[num_pts-1], pts[0], thickness);
+	u8 p0[] = {pts[num_pts-1].x, pts[num_pts-1].y};
+	u8 p1[] = {pts[0].x, pts[0].y};
+	render_line(p0, p1, thickness);
 }
 
 //# optimized: render filled polygon
@@ -691,8 +695,8 @@ void render_pie(M_Point center, u8 radius, u16 start_angle, u16 end_angle) {
 		get_circle_point(center, radius, angle, &x, &y);
 		
 		// Draw line from center to edge
-		M_Point p0 = { x: center.x, y: center.y };
-		M_Point p1 = { x: x, y: y };
+		u8 p0[] = { center.x, center.y };
+		u8 p1[] = { x, y };
 		render_line(p0, p1, 1);
 		
 		// Break conditions
@@ -903,12 +907,12 @@ void _test_lines() {
 
 	//# line
 	for(u8 x=0; x<SSD1306_W; x+=16) {
-		M_Point point_a0 = { x: x, y: 0 };
-		M_Point point_a1 = { x: SSD1306_W, y: y };
+		u8 point_a0[] = { x, 0 };
+		u8 point_a1[] = { SSD1306_W, y };
 		render_line(point_a0, point_a1, 2);
 
-		M_Point point_b0 = { x: SSD1306_W-x, y: SSD1306_H };
-		M_Point point_b1 = { x: 0, y: SSD1306_H-y };
+		u8 point_b0[] = { SSD1306_W-x, SSD1306_H };
+		u8 point_b1[] = { 0, SSD1306_H-y };
 		render_line(point_b0, point_b1, 2);
 
 		y+= SSD1306_H/8;
@@ -917,9 +921,9 @@ void _test_lines() {
 
 
 void ssd1306_draw_test() {
-	// test_polys();
+	test_polys();
 	// test_circles();
-	_test_lines();
+	// _test_lines();
 
 	// ssd1306_vertical_line(&line, 2, 0);
 
