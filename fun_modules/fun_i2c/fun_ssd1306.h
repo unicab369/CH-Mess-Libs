@@ -161,7 +161,7 @@ u8 ssd1306_init() {
 	}
 
 	//# Clear the frame buffer
-	ssd1306_fill(0xFF);
+	// ssd1306_fill(0xFF);
 
 	return 0;
 }
@@ -169,12 +169,12 @@ u8 ssd1306_init() {
 //# Set window
 void ssd1306_setwindow(u8 start_page, u8 end_page, u8 start_column, u8 end_column) {
 	SSD1306_CMD(SSD1306_COLUMNADDR);
-	SSD1306_CMD(start_column);   				// Column start address (0 = reset)
-	SSD1306_CMD(end_column); 	// Column end address (127 = reset)
+	SSD1306_CMD(start_column);   		// Column start address (0 = reset)
+	SSD1306_CMD(end_column); 			// Column end address (127 = reset)
 	
 	SSD1306_CMD(SSD1306_PAGEADDR);
-	SSD1306_CMD(start_page); 	// Page start address (0 = reset)
-	SSD1306_CMD(end_page); 		// Page end address
+	SSD1306_CMD(start_page); 			// Page start address (0 = reset)
+	SSD1306_CMD(end_page); 				// Page end address
 }
 
 //# Draw page string
@@ -206,7 +206,7 @@ void ssd1306_draw_pageStr(const char *str, u8 page, u8 column, u8 fill_space) {
 
 //# Draw string
 void ssd1306_draw_str(const char *str, u8 page, u8 column) {
-	ssd1306_draw_pageStr(str, page, column, 1);
+	ssd1306_draw_pageStr(str, page, column, 0);
 }
 
 //# Draw area
@@ -233,7 +233,6 @@ void ssd1306_drawAll() {
 
 void ssd1306_fill(u8 value) {
 	memset(frame_buffer, value, sizeof(frame_buffer));
-	ssd1306_drawAll();
 }
 
 //! ####################################
@@ -261,33 +260,28 @@ void render_fastHorLine(u8 y, u8 x0, u8 x1) {
 	}
 }
 
-typedef struct {
-	u8 l0;
-	u8 l1;
-} Limit;
-
 //# render horizontal line
 void render_horLine(
-	u8 y, Limit x_limit, u8 thickness, u8 mirror
+	u8 y, u8 x_limit[2], u8 thickness, u8 mirror
 ) {
 	// Validate coordinates
 	if (y >= SSD1306_H) return;
 
 	// Clamp to display bounds
-	if (x_limit.l0 >= SSD1306_W) x_limit.l0 = SSD1306_W_LIMIT;
-	if (x_limit.l1 >= SSD1306_W) x_limit.l1 = SSD1306_W_LIMIT;
+	if (x_limit[0] >= SSD1306_W) x_limit[0] = SSD1306_W_LIMIT;
+	if (x_limit[1] >= SSD1306_W) x_limit[1] = SSD1306_W_LIMIT;
 	
 	// Handle mirroring
 	if (mirror) {
-		x_limit.l0 = SSD1306_W_LIMIT - x_limit.l0;
-		x_limit.l1 = SSD1306_W_LIMIT - x_limit.l1;
+		x_limit[0] = SSD1306_W_LIMIT - x_limit[0];
+		x_limit[1] = SSD1306_W_LIMIT - x_limit[1];
 	}
 
 	// Ensure x1 <= x2 (swap if needed)
-	if (x_limit.l0 > x_limit.l1) {
-		u8 temp = x_limit.l0;
-		x_limit.l0 = x_limit.l1;
-		x_limit.l1 = temp;
+	if (x_limit[0] > x_limit[1]) {
+		u8 temp = x_limit[0];
+		x_limit[0] = x_limit[1];
+		x_limit[1] = temp;
 	}
 
 	// Handle thickness
@@ -299,7 +293,7 @@ void render_horLine(
 	for (u8 y_pos = y; y_pos <= y_end ; y_pos++) {
 		M_Page_Mask mask = page_masks[y_pos];
 
-		for (u8 x_pos = x_limit.l0; x_pos <= x_limit.l1; x_pos++) {
+		for (u8 x_pos = x_limit[0]; x_pos <= x_limit[1]; x_pos++) {
 			frame_buffer[mask.page][x_pos] |= mask.bitmask;
 		}
 	}
@@ -307,26 +301,26 @@ void render_horLine(
 
 //# render vertical line
 void render_verLine(
-	u8 x, Limit y_limit, u8 thickness, u8 mirror
+	u8 x, u8 y_limit[2], u8 thickness, u8 mirror
 ) {
 	// Validate coordinates
 	if (x >= SSD1306_W) return;
 
 	// Clamp to display bounds
-	if (y_limit.l0 >= SSD1306_H) y_limit.l0 = SSD1306_H_LIMIT;
-	if (y_limit.l1 >= SSD1306_H) y_limit.l1 = SSD1306_H_LIMIT;
+	if (y_limit[0] >= SSD1306_H) y_limit[0] = SSD1306_H_LIMIT;
+	if (y_limit[1] >= SSD1306_H) y_limit[1] = SSD1306_H_LIMIT;
 
 	// Handle mirroring
 	if (mirror) {
-		y_limit.l0 = SSD1306_H_LIMIT - y_limit.l0;
-		y_limit.l1 = SSD1306_H_LIMIT - y_limit.l1;
+		y_limit[0] = SSD1306_H_LIMIT - y_limit[0];
+		y_limit[1] = SSD1306_H_LIMIT - y_limit[1];
 	}
 
 	// Ensure y1 <= y2 (swap if needed)
-	if (y_limit.l0 > y_limit.l1) {
-		u8 temp = y_limit.l0;
-		y_limit.l0 = y_limit.l1;
-		y_limit.l1 = temp;
+	if (y_limit[0] > y_limit[1]) {
+		u8 temp = y_limit[0];
+		y_limit[0] = y_limit[1];
+		y_limit[1] = temp;
 	}
 
 	// Handle thickness
@@ -335,7 +329,7 @@ void render_verLine(
 	if (x_end < x) return;  // Skip if thickness causes overflow
 
 	// // Draw vertical line with thickness
-	// for (u8 y_pos = y_limit.l0; y_pos <= y_limit.l1; y_pos++) {
+	// for (u8 y_pos = y_limit[0]; y_pos <= y_limit[1]; y_pos++) {
 	//	 M_Page_Mask mask = page_masks[y_pos];
 		
 	//	 for (u8 x_pos = x; x_pos <= x_end; x_pos++) {
@@ -346,7 +340,7 @@ void render_verLine(
 	//# Optimized: save 500-700 us
 	u8 x_len = x_end - x + 1;  // Prerender length
 
-	for (u8 y_pos = y_limit.l0; y_pos <= y_limit.l1; y_pos++) {
+	for (u8 y_pos = y_limit[0]; y_pos <= y_limit[1]; y_pos++) {
 		M_Page_Mask mask = page_masks[y_pos];
 		u8* row_start = &frame_buffer[mask.page][x];  	// Get row pointer
 
@@ -356,6 +350,7 @@ void render_verLine(
 	}
 }
 
+#define ABS(x) ((x) < 0 ? -(x) : (x))
 
 typedef struct {
 	u8 x;
@@ -371,12 +366,12 @@ void render_line(M_Point p0, M_Point p1, u8 thickness) {
 	p1.y = (p1.y < SSD1306_H) ? p1.y : SSD1306_H_LIMIT;
 
 	// Bresenham's line algorithm
-	u16 dx = abs(p1.x - p0.x);
-	u16 dy = -abs(p1.y - p0.y);
-	u16 sx = p0.x < p1.x ? 1 : -1;
-	u16 sy = p0.y < p1.y ? 1 : -1;
-	u16 err = dx + dy;
-	u16 e2;
+	s16 dx = ABS(p1.x - p0.x);
+	s16 dy = -ABS(p1.y - p0.y);
+	s16 sx = p0.x < p1.x ? 1 : -1;
+	s16 sy = p0.y < p1.y ? 1 : -1;
+	s16 err = dx + dy;
+	s16 e2;
 
 	// Prerender these before the loop:
 	u8 *fb_base = &frame_buffer[0][0];
@@ -553,20 +548,23 @@ void render_rect(
 	}
 
 	// Draw rectangle with optional fill
-	Limit hLimit = { l0: p0.x, l1: x_end };
+	// Limit hLimit = { l0: p0.x, l1: x_end };
+	u8 x_limit[] = { p0.x, x_end };
+
 	if (fill) {
 		// Filled rectangle using horizontal lines (faster for row-major displays)
 		for (u8 y_pos = p0.y; y_pos <= y_end; y_pos++) {
-			render_horLine(y_pos, hLimit, 1, 0);
+			render_horLine(y_pos, x_limit, 1, 0);
 		}
 	} else {
-		Limit vLimit = { l0: p0.y + 1, l1: y_end - 1 };
+		// Limit vLimit = { l0: p0.y + 1, l1: y_end - 1 };
+		u8 y_limit[] = { p0.y + 1, y_end - 1 };
 
 		// Outline only
-		render_horLine(p0.y, hLimit, 1, 0);	 	// Top edge
-		render_horLine(y_end, hLimit, 1, 0);		// Bottom edge
-		render_verLine(p0.x, vLimit, 1, 0); 		// Left edge
-		render_verLine(x_end, vLimit, 1, 0); 		// Right edge
+		render_horLine(p0.y, x_limit, 1, 0);	 	// Top edge
+		render_horLine(y_end, x_limit, 1, 0);		// Bottom edge
+		render_verLine(p0.x, y_limit, 1, 0); 		// Left edge
+		render_verLine(x_end, y_limit, 1, 0); 		// Right edge
 	}
 }
 
@@ -888,44 +886,44 @@ void test_circles() {
 	}
 }
 
-// #include "lib_rand.h"
+// # include "lib_rand.h"
 
 u8 myvalues[16] = { 30, 50, 60, 40, 20, 50, 30, 10, 35, 10, 20, 30, 40, 50, 60, 20 };
 
-void test_lines() {
+void ssd1306_test_lines() {
 	// seed(0x12345678);
 	int y = 0;
 	
 	//# hor-ver lines
 	for(int8_t i = 0; i<sizeof(myvalues); i++) {
-		// u8 rand_byte_low = rand() & 0xFF;
-		Limit limit = { l0: 0, l1: myvalues[i] };
-		// render_horLine(y, limit, 3, 0);
-		// render_horLine(y, 0, myvalues[i], 3, 1);
-		render_verLine(y, limit, 3, 0);
-		// render_verLine(y, 0, myvalues[i], 3, 1);
+		u8 limit[] = { 0, myvalues[i] };
+		render_horLine(y, limit, 1, 0);
+		render_horLine(y, limit, 1, 1);
+		render_verLine(y, limit, 1, 0);
+		render_verLine(y, limit, 1, 1);
 		y += 4;
 	}
 
-	//# line
-	for(u8 x=0;x<SSD1306_W;x+=16) {
-		M_Point point_a0 = { x: x, y: 0 };
-		M_Point point_a1 = { x: SSD1306_W, y: y };
-		M_Point point_b0 = { x: SSD1306_W-x, y: SSD1306_H };
-		M_Point point_b1 = { x: 0, y: SSD1306_H-y };
-		
-		render_line(point_a0, point_a1, 1);
-		render_line(point_b0, point_b1, 1);
+	// //# line
+	// for(u8 x=0; x<SSD1306_W; x+=16) {
+	// 	M_Point point_a0 = { x: x, y: 0 };
+	// 	M_Point point_a1 = { x: SSD1306_W, y: y };
+	// 	render_line(point_a0, point_a1, 1);
 
-		y+= SSD1306_H/8;
-	}
+	// 	M_Point point_b0 = { x: SSD1306_W-x, y: SSD1306_H };
+	// 	M_Point point_b1 = { x: 0, y: SSD1306_H-y };
+	// 	render_line(point_b0, point_b1, 1);
+
+	// 	y+= SSD1306_H/8;
+	// }
+	printf("IM DONE\n");
 }
 
 
 void ssd1306_draw_test() {
 	test_polys();
-	test_circles();
-	test_lines();
+	// test_circles();
+	// test_lines();
 
 	// ssd1306_vertical_line(&line, 2, 0);
 

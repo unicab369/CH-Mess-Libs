@@ -31,7 +31,7 @@ u8 SSD1306_DATA(u8 *data, int sz) {
 }
 
 //# Callbacks
-void onHandle_Encoder(u8 position, int8_t direction) {
+void onHandle_Encoder(int8_t position, int8_t direction) {
 	printf("pos: %d, direction: %d\n", position, direction);
 	// mngI2c_load_encoder(millis(), position, direction);
 }
@@ -48,7 +48,7 @@ void i2c_scan_callback(const u8 addr) {
 	static int line = 1;
 	sprintf(str_output, "I2C: 0x%02X", addr);
 	printf("%s\n", str_output);
-	modI2C_display(str_output, line++);
+	// modI2C_display(str_output, line++);
 }
 
 int main() {
@@ -62,8 +62,8 @@ int main() {
 	// fun_encoder_tim2_init(&encoder_a);
 
 	Encoder_GPIO_t encoder_b = {
-		.clk_pin = PD4,
-		.dt_pin = PD3,
+		.pinA = PD4,
+		.pinB = PD3,
 	};
 	fun_encoder_gpio_init(&encoder_b);
 
@@ -76,13 +76,17 @@ int main() {
 	else {
 		if (i2c_ping(0x3C) == I2C_OK) {
 			ssd1306_init();
+			ssd1306_fill(0x00);
 
-			sprintf(str_output, "Hello Bee %ld", counter);
-			ssd1306_draw_str(str_output, 0, 0);
+			// sprintf(str_output, "Hello Bee %ld", counter);
+			// ssd1306_draw_str(str_output, 0, 0);
+
+			ssd1306_test_lines();
+			ssd1306_drawAll();
 		}
 
 		// Scan the I2C Bus, prints any devices that respond
-		printf("- Scanning I2C Bus for Devices -\n");
+		printf("- Scanning I2Cs -\n");
 		i2c_scan(i2c_scan_callback);
 		printf("- Done Scanning -\n\n");
 	}
@@ -90,12 +94,12 @@ int main() {
 	while(1) {
 		u32 moment = millis();
 
-		if ((millis() - time_ref) > 2000) {
+		if ((moment - time_ref) > 1000) {
+			sprintf(str_output, "Hello Bee %ld", counter++);
+			ssd1306_draw_str(str_output, 0, 0);
+
 			// test_lines();
 			// ssd1306_drawAll();
-
-			// sprintf(str_output, "Hello Bee %ld", counter++);
-			// ssd1306_draw_str(str_output, 0, 0);
 			time_ref = millis();
 		}
 
