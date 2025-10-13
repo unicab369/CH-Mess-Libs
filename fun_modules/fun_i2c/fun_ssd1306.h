@@ -1,4 +1,4 @@
-// SSD1306 init functions borrowed from  
+// SSD1306 init functions borrowed from
 // * Single-File-Header for using SPI OLED
 // * 05-05-2023 E. Brombaugh
 
@@ -136,15 +136,14 @@ const u8 ssd1306_init_array[] = {
 #define SSD1306_W_LIMIT	SSD1306_W - 1
 #define SSD1306_H_LIMIT	SSD1306_H - 1
 
-// u8 frame_buffer[SSD1306_PAGES][SSD1306_W] = { 0 };
-u8 frame_buffer[SSD1306_PAGES * SSD1306_W] = { 0 };
-
 typedef struct {
 	u8 page;
 	u8 bitmask;
 } Page_Mask_t;
 
 Page_Mask_t page_masks[SSD1306_H];
+
+u8 frame_buffer[SSD1306_PAGES * SSD1306_W] = { 0 };
 
 //# Init function
 u8 ssd1306_init() {
@@ -240,8 +239,22 @@ void ssd1306_fill(u8 value) {
 	memset(frame_buffer, value, sizeof(frame_buffer));
 }
 
+//# render pixel
+void render_pixel(u8 x, u8 y) {
+	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
+	Page_Mask_t mask = page_masks[y];
+	frame_buffer[mask.page * SSD1306_W + x] |= mask.bitmask;
+}
+
+void render_pixel_erase(u8 x, u8 y) {
+	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
+	Page_Mask_t mask = page_masks[y];
+	frame_buffer[mask.page * SSD1306_W + x] &= ~mask.bitmask;
+}
+
+
 //! ####################################
-//! LINE FUNCTIONS
+//! CUSTOM STRING FUNCTIONS
 //! ####################################
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
@@ -264,12 +277,119 @@ void ssd1306_fill(u8 value) {
 	if (value0 > max) value0 = max; \
 	if (value1 > max) value1 = max;
 
-//# render pixel
-void render_pixel(u8 x, u8 y) {
-	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
-	Page_Mask_t mask = page_masks[y];
-	frame_buffer[mask.page * SSD1306_W + x] |= mask.bitmask;
+typedef struct {
+	u8 *FONT;
+	u8 WIDTH, HEIGHT;
+	u8 SPACE;
+	u8 scale;
+	u8 color;
+} Str_Config_t;
+
+//# Draw string with size
+void ssd1306_render_scaled_text(
+	u8 x, u8 y, const char *str, Str_Config_t *config
+) {
+	u8 space_offset = config->scale * config->WIDTH + config->SPACE;
+    
+    while (*str) {
+        u8 c = *str++;
+        if (c < 32 || c > 127) c = '?';
+        u8 char_index = c - 32;
+        u16 char_pos = char_index * config->WIDTH;
+
+        for (u8 col = 0; col < config->WIDTH; col++) {
+            u8 glyph = config->FONT[char_pos + col];
+
+            for (u8 row = 0; row < config->HEIGHT; row++) {
+                // Determine if we should draw based on color mode
+                u8 draw_pixel = (glyph & (1 << row));
+                
+                // In inverted mode, we draw the background instead of the text
+                if (config->color == 0) draw_pixel = !draw_pixel; // Flip for inversion
+                
+                if (draw_pixel) {
+                    u8 col_value = col * config->scale;
+                    u8 row_value = row * config->scale;
+
+                    for (u8 dx = 0; dx < config->scale; dx++) {
+                        for (u8 dy = 0; dy < config->scale; dy++) {
+                            render_pixel(x + dx + col_value, y + dy + row_value);
+                        }
+                    }
+                }
+            }
+        }
+
+        x += space_offset;
+    }
 }
+
+void _calc_text_bounds(
+	u8 char_count, u8 x, u8 y, Str_Config_t *config, u8 *max_x, u8 *max_y
+) {
+    if (!config || char_count < 1) return;
+    
+    // Calculate total width: (chars * width * scale) + (spaces between chars)
+    u8 total_width = (char_count * config->WIDTH * config->scale) + 
+                     ((char_count - 1) * config->SPACE);
+    u8 total_height = config->HEIGHT * config->scale;
+    
+    // Calculate maximum bounds
+    u8 calculated_max_x = x + total_width;
+    u8 calculated_max_y = y + total_height - 1;  // -1 because coordinates are 0-indexed
+    
+    // Clamp to screen bounds
+	CLAMP_VALUE(calculated_max_x, SSD1306_W_LIMIT);
+	CLAMP_VALUE(calculated_max_y, SSD1306_H_LIMIT);
+    
+    // Return results
+    if (max_x) *max_x = calculated_max_x;
+    if (max_y) *max_y = calculated_max_y;
+}
+
+void _clear_text_bounds(u8 x, u8 y, u8 max_x, u8 max_y) {    
+    u8 x_count = max_x - x + 1;
+    
+    // Use page_masks to build combined bitmasks per page
+    for (u8 page = 0; page < SSD1306_PAGES; page++) {
+        u8 output_bitmask = 0;
+        u8 page_START = page * 8;
+        u8 page_END = page_START + 7;
+        
+        // Only process pages that overlap with our Y range
+        if (max_y < page_START || y > page_END) continue;
+        
+        // Combine all bitmasks for Y coordinates in this page's range
+        u8 start_y = (y > page_START) ? y : page_START;
+        u8 end_y = (max_y < page_END) ? max_y : page_END;
+        
+        for (u8 py = start_y; py <= end_y; py++) {
+            output_bitmask |= page_masks[py].bitmask;
+        }
+        
+        // Apply to all X coordinates in range
+        u8 *dest = &frame_buffer[page * SSD1306_W + x];
+        for (u8 i = 0; i < x_count; i++) dest[i] &= ~output_bitmask;
+    }
+}
+
+void ssd1306_draw_scaled_text(
+	u8 x, u8 y, const char *str, Str_Config_t *config
+) {
+	u8 max_x, max_y;
+	_calc_text_bounds(strlen(str), x, y, config, &max_x, &max_y);
+
+	u32 start_time = micros();
+	_clear_text_bounds(x, y, max_x, max_y);
+	printf("Clear time: %d us\n", micros() - start_time);
+
+	ssd1306_render_scaled_text(x, y, str, config);
+}
+
+
+//! ####################################
+//! LINE FUNCTIONS
+//! ####################################
 
 //# render_fastHorLine
 void render_fastHorLine(u8 y, u8 x0, u8 x1) {

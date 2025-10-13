@@ -78,11 +78,11 @@ int main() {
 			ssd1306_init();
 			ssd1306_fill(0x00);
 
-			// sprintf(str_output, "Hello Bee %ld", counter);
-			// ssd1306_draw_str(str_output, 0, 0);
+			sprintf(str_output, "Hello Bee %ld", counter);
+			ssd1306_draw_str(str_output, 0, 0);
 
 			time_ref = millis();
-			ssd1306_draw_test();
+			// ssd1306_draw_test();
 			ssd1306_drawAll();
 		
 			printf("elapsed: %d ms\n", millis() - time_ref);
@@ -94,15 +94,28 @@ int main() {
 		printf("- Done Scanning -\n\n");
 	}
 
+	Str_Config_t str_conf = {
+		.FONT = FONT_7x5,
+		.WIDTH = 5,
+		.HEIGHT = 7,
+		.SPACE = 1,
+		.scale = 2,
+		.color = 1,
+	};
+
 	while(1) {
 		u32 moment = millis();
 
 		if ((moment - time_ref) > 1000) {
-			sprintf(str_output, "Hello Bee %ld", counter++);
-			ssd1306_draw_str(str_output, 0, 0);
+			sprintf(str_output, "Hello %ld", counter++);
+			// ssd1306_draw_scaled_text(0, 0, "AAAAAAAAAAAAAAAAAAAAAA", &str_conf);
+			ssd1306_draw_scaled_text(0, 0, str_output, &str_conf);
 
 			// test_lines();
-			// ssd1306_drawAll();
+			u32 time_ref2 = millis();
+			ssd1306_drawAll();
+			// printf("elapsed: %d ms\n", millis() - time_ref2);
+
 			time_ref = millis();
 		}
 
