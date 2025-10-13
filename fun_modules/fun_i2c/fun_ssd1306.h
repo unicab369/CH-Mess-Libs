@@ -142,9 +142,9 @@ u8 frame_buffer[SSD1306_PAGES * SSD1306_W] = { 0 };
 typedef struct {
 	u8 page;
 	u8 bitmask;
-} M_Page_Mask;
+} Page_Mask_t;
 
-M_Page_Mask page_masks[SSD1306_H];
+Page_Mask_t page_masks[SSD1306_H];
 
 //# Init function
 u8 ssd1306_init() {
@@ -244,6 +244,8 @@ void ssd1306_fill(u8 value) {
 //! LINE FUNCTIONS
 //! ####################################
 
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+
 #define SORT_LIMITS(limits) \
     if ((limits)[0] > (limits)[1]) { \
         u8 temp = (limits)[0]; \
@@ -265,7 +267,7 @@ void ssd1306_fill(u8 value) {
 //# render pixel
 void render_pixel(u8 x, u8 y) {
 	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
-	M_Page_Mask mask = page_masks[y];
+	Page_Mask_t mask = page_masks[y];
 	frame_buffer[mask.page * SSD1306_W + x] |= mask.bitmask;
 }
 
@@ -276,7 +278,7 @@ void render_fastHorLine(u8 y, u8 x0, u8 x1) {
 	// Clamp x-coordinates
 	CLAMP_VALUES(x0, x1, SSD1306_W_LIMIT);
 
-	M_Page_Mask mask = page_masks[y];
+	Page_Mask_t mask = page_masks[y];
 	u8* row_start = &frame_buffer[mask.page * SSD1306_W];
 
 	for (u8 x = x0; x <= x1; x++) {
@@ -284,10 +286,23 @@ void render_fastHorLine(u8 y, u8 x0, u8 x1) {
 	}
 }
 
+//# render_fastHorLine erase
+void render_fastHorLine_erase(u8 y, u8 x0, u8 x1) {
+    if (y > SSD1306_H_LIMIT) return;
+    
+	// Clamp x-coordinates
+	CLAMP_VALUES(x0, x1, SSD1306_W_LIMIT);
+
+    Page_Mask_t mask = page_masks[y];
+    u8* row = &frame_buffer[mask.page * SSD1306_W];
+    
+    for (u8 x = x0; x <= x1; x++) {
+        row[x] &= ~mask.bitmask;  // CLEAR pixels instead of setting them
+    }
+}
+
 //# render horizontal line
-void render_horLine(
-	u8 y, u8 x_limits[2], u8 thickness, u8 mirror
-) {
+void render_horLine(u8 y, u8 x_limits[2], u8 thickness, u8 mirror) {
 	// Validate coordinates
 	if (y > SSD1306_H_LIMIT) return;
 
@@ -311,7 +326,7 @@ void render_horLine(
 	u8 width = x_limits[1] - x_limits[0] + 1;
 
 	for (u8 y_pos = y; y_pos <= y_end ; y_pos++) {
-		M_Page_Mask mask = page_masks[y_pos];
+		Page_Mask_t mask = page_masks[y_pos];
 		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x_limits[0]];
 
         for (u8 i = 0; i < width; i++) {
@@ -321,9 +336,7 @@ void render_horLine(
 }
 
 //# render vertical line
-void render_verLine(
-	u8 x, u8 y_limits[2], u8 thickness, u8 mirror
-) {
+void render_verLine(u8 x, u8 y_limits[2], u8 thickness, u8 mirror) {
 	// Validate coordinates
 	if (x > SSD1306_W_LIMIT) return;
 
@@ -347,7 +360,7 @@ void render_verLine(
 	u8 x_len = x_end - x + 1;  // Prerender length
 
 	for (u8 y_pos = y_limits[0]; y_pos <= y_limits[1]; y_pos++) {
-		M_Page_Mask mask = page_masks[y_pos];
+		Page_Mask_t mask = page_masks[y_pos];
 		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x];
 
 		for (u8 i = 0; i < x_len; i++) {
@@ -355,9 +368,6 @@ void render_verLine(
 		}
 	}
 }
-
-#define ABS(x) ((x) < 0 ? -(x) : (x))
-
 
 //# render line (Bresenham's algorithm)
 void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
@@ -381,7 +391,7 @@ void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
 		if (thickness == 1) {
 			// Fast path for single-pixel
 			if (x0 < SSD1306_W && y0 < SSD1306_H) {
-				M_Page_Mask mask = page_masks[y0];
+				Page_Mask_t mask = page_masks[y0];
 				frame_buffer[mask.page * SSD1306_W + x0] |= mask.bitmask;
 			}
 		} else {
@@ -397,7 +407,7 @@ void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
 
 			// Optimized row filling
 			for (u8 y = y_start; y <= y_end; y++) {
-				M_Page_Mask mask = page_masks[y];
+				Page_Mask_t mask = page_masks[y];
 				u8* row = &frame_buffer[mask.page * SSD1306_W + x_start];
 				u8 pattern = mask.bitmask;
 
@@ -571,9 +581,8 @@ const u8 SIN_LUT[] = {
 void render_circle(
 	u8 point[2], u8 radius, u8 fill
 ) {
-	u8 px = point[0], py = point[1];
-
 	// Validate center coordinates
+	u8 px = point[0], py = point[1];
 	if (px >= SSD1306_W || py >= SSD1306_H) return;
 
 	s16 x = -radius;
@@ -586,12 +595,12 @@ void render_circle(
 		u8 x_start 	= px + x;
 		u8 x_end   	= px - x;
 		u8 y_top   	= py - y;
-		u8 y_bottom 	= py + y;
+		u8 y_bottom = py + y;
 
 		if (fill) {
 			// Draw filled horizontal lines (top and bottom halves)
-			render_fastHorLine(y_top, x_start, x_end);	 // Top half
-			render_fastHorLine(y_bottom, x_start, x_end);  // Bottom half
+			render_fastHorLine(y_top, x_start, x_end);	 	// Top half
+			render_fastHorLine(y_bottom, x_start, x_end);  	// Bottom half
 		} else {
 			u8 xy_start 	= px + y;
 			u8 xy_end   	= px - y;
@@ -619,8 +628,52 @@ void render_circle(
 	} while (x <= 0);
 }
 
+//# render ring (Bresenham's algorithm)
+void _render_circle_with_func(u8 point[2], u8 radius, void (*func)(u8 y, u8 x_start, u8 x_end)) {
+	// Validate center coordinates
+	u8 px = point[0], py = point[1];
+    if (px >= SSD1306_W || py >= SSD1306_H) return;
+
+    s16 x = -radius;
+    s16 y = 0;
+    s16 err = 2 - 2 * radius;
+    s16 e2;
+
+    do {
+        u8 x_start  = px + x;
+        u8 x_end    = px - x;
+        u8 y_top    = py - y;
+        u8 y_bottom = py + y;
+
+        // handle callbacks
+		func(y_top, x_start, x_end);		// Top half
+		func(y_bottom, x_start, x_end);		// Bottom half
+
+        e2 = err;
+        if (e2 <= y) {
+            err += ++y * 2 + 1;
+            if (-x == y && e2 <= x) e2 = 0;
+        }
+        if (e2 > x) err += ++x * 2 + 1;
+    } while (x <= 0);
+}
+
+void render_ring(u8 point[2], u8 radius, u8 thickness) {
+    if ((point[0] >= SSD1306_W) | (point[1] >= SSD1306_H) | (radius == 0)) return;
+    
+    // Draw filled outer circle
+    render_circle(point, radius, 1);
+    
+    // Erase the inner circle
+	u8 inner_radius = (thickness >= radius) ? 0 : (radius - thickness);
+
+    if (inner_radius > 0) {
+		_render_circle_with_func(point, inner_radius, render_fastHorLine_erase);
+    }
+}
 
 
+//# render pie
 // Helper function to get circle point using SIN_LUT
 static void get_circle_point(
 	u8 center[2], u8 radius, u16 angle, 
@@ -647,103 +700,35 @@ static void get_circle_point(
 	}
 }
 
-//# render pie
+// Simplified pie rendering
 void render_pie(u8 center[2], u8 radius, u16 start_angle, u16 end_angle) {	
-	// Draw center point
-	render_pixel(center[0], center[1]);
-	
-	// Special case: full circle
-	if (start_angle == end_angle) {
-		// render_circle(center, radius, 1); // Fill entire circle
-		return;
-	}
-	
-	// Angle stepping (adaptive based on radius)
-	u8 step = (radius > 40) ? 2 : 1;
-	
-	// Draw radial lines
-	u16 angle = start_angle;
-	u16 x, y;
-
-	while (1) {
-		// Calculate edge point
-		get_circle_point(center, radius, angle, &x, &y);
-		
-		// Draw line from center to edge
-		u8 p0[] = { center[0], center[1] };
-		u8 p1[] = { x, y };
-		render_line(p0, p1, 1);
-		
-		// Break conditions
-		if (angle == end_angle) break;
-		
-		// Move to next angle
-		angle = (angle + step) % 360;
-		
-		// Handle wrap-around
-		if (start_angle > end_angle && angle < start_angle && angle > end_angle) break;
-	}
-}
-
-
-//# render ring (Bresenham's algorithm)
-void render_fastHorLine_erase(u8 y, u8 x0, u8 x1) {
-    if (y >= SSD1306_H) return;
+    // Handle full circle case
+    if (start_angle == end_angle) {
+        render_circle(center, radius, 1);  // Fill entire circle
+        return;
+    }
     
-    if (x0 >= SSD1306_W) x0 = SSD1306_W_LIMIT;
-    if (x1 >= SSD1306_W) x1 = SSD1306_W_LIMIT;
-
-    M_Page_Mask mask = page_masks[y];
-    u8* row = &frame_buffer[mask.page * SSD1306_W];
+    // Normalize angles and determine direction
+    u16 angle = start_angle % 360;
+    u16 target_angle = end_angle % 360;
     
-    for (u8 x = x0; x <= x1; x++) {
-        row[x] &= ~mask.bitmask;  // CLEAR pixels instead of setting them
+    // Ensure we always draw in positive direction
+    if (target_angle < angle) target_angle += 360;
+    u8 step = 1;
+    
+    // Draw radial lines
+    while (angle <= target_angle) {
+        u8 x, y;
+        get_circle_point(center, radius, angle, &x, &y);
+        
+        // Draw line from center to edge
+        u8 p0[] = { center[0], center[1] };
+        u8 p1[] = { x, y };
+        render_line(p0, p1, 1);
+        
+        angle += step;
     }
 }
-
-
-void render_circle_erase(u8 point[2], u8 radius) {
-	u8 px = point[0], py = point[1];
-    if (px >= SSD1306_W || py >= SSD1306_H) return;
-
-    s16 x = -radius;
-    s16 y = 0;
-    s16 err = 2 - 2 * radius;
-    s16 e2;
-
-    do {
-        u8 x_start  = px + x;
-        u8 x_end    = px - x;
-        u8 y_top    = py - y;
-        u8 y_bottom = py + y;
-
-        // ERASE horizontal lines (clear pixels instead of setting them)
-        render_fastHorLine_erase(y_top, x_start, x_end);
-        render_fastHorLine_erase(y_bottom, x_start, x_end);
-
-        e2 = err;
-        if (e2 <= y) {
-            err += ++y * 2 + 1;
-            if (-x == y && e2 <= x) e2 = 0;
-        }
-        if (e2 > x) err += ++x * 2 + 1;
-    } while (x <= 0);
-}
-
-void render_ring(u8 point[2], u8 radius, u8 thickness) {
-    if ((point[0] >= SSD1306_W) | (point[1] >= SSD1306_H) | (radius == 0)) return;
-    
-    // Draw filled outer circle
-    render_circle(point, radius, 1);
-    
-    // Erase the inner circle
-	u8 inner_radius = (thickness >= radius) ? 0 : (radius - thickness);
-
-    if (inner_radius > 0) {
-        render_circle_erase(point, inner_radius);
-    }
-}
-
 
 //! ####################################
 //! TEST FUNCTIONS
@@ -858,9 +843,10 @@ void test_circles() {
 			render_ring((u8[]){ 90, y + 12 }, 7, 3);
 		}
 		
-		// render_pie((u8[]){ 30, y + 12 }, 10, 0, 100);
 		y += 14;
 	}
+
+	render_pie((u8[]){ 60, 55 }, 12, 0, 180);
 }
 
 
