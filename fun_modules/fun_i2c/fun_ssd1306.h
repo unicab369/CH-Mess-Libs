@@ -358,10 +358,6 @@ void render_verLine(
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 
-typedef struct {
-	u8 x;
-	u8 y;
-} M_Point;
 
 //# render line (Bresenham's algorithm)
 void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
@@ -627,7 +623,7 @@ void render_circle(
 
 // Helper function to get circle point using SIN_LUT
 static void get_circle_point(
-	M_Point center, u8 radius, u16 angle, 
+	u8 center[2], u8 radius, u16 angle, 
 	u16 *x, u16 *y
 ) {
 	u8 quadrant = angle / 90;
@@ -636,25 +632,25 @@ static void get_circle_point(
 	u8 cos_val = SIN_LUT[90 - reduced_angle];
 	
 	switch (quadrant) {
-		case 0: *x = center.x + (radius * cos_val) / 255;
-				*y = center.y - (radius * sin_val) / 255;
+		case 0: *x = center[0] + (radius * cos_val) / 255;
+				*y = center[1] - (radius * sin_val) / 255;
 				break;
-		case 1: *x = center.x - (radius * sin_val) / 255;
-				*y = center.y - (radius * cos_val) / 255;
+		case 1: *x = center[0] - (radius * sin_val) / 255;
+				*y = center[1] - (radius * cos_val) / 255;
 				break;
-		case 2: *x = center.x - (radius * cos_val) / 255;
-				*y = center.y + (radius * sin_val) / 255;
+		case 2: *x = center[0] - (radius * cos_val) / 255;
+				*y = center[1] + (radius * sin_val) / 255;
 				break;
-		case 3: *x = center.x + (radius * sin_val) / 255;
-				*y = center.y + (radius * cos_val) / 255;
+		case 3: *x = center[0] + (radius * sin_val) / 255;
+				*y = center[1] + (radius * cos_val) / 255;
 				break;
 	}
 }
 
 //# render pie
-void render_pie(M_Point center, u8 radius, u16 start_angle, u16 end_angle) {	
+void render_pie(u8 center[2], u8 radius, u16 start_angle, u16 end_angle) {	
 	// Draw center point
-	render_pixel(center.x, center.y);
+	render_pixel(center[0], center[1]);
 	
 	// Special case: full circle
 	if (start_angle == end_angle) {
@@ -674,7 +670,7 @@ void render_pie(M_Point center, u8 radius, u16 start_angle, u16 end_angle) {
 		get_circle_point(center, radius, angle, &x, &y);
 		
 		// Draw line from center to edge
-		u8 p0[] = { center.x, center.y };
+		u8 p0[] = { center[0], center[1] };
 		u8 p1[] = { x, y };
 		render_line(p0, p1, 1);
 		
@@ -862,12 +858,11 @@ void test_circles() {
 			render_ring((u8[]){ 90, y + 12 }, 7, 3);
 		}
 		
-		// render_pie((M_Point){ 30, y + 12 }, 20, 0, 100);
+		// render_pie((u8[]){ 30, y + 12 }, 10, 0, 100);
 		y += 14;
 	}
 }
 
-// # include "lib_rand.h"
 
 u8 myvalues[16] = { 30, 50, 60, 40, 20, 50, 30, 10, 35, 10, 20, 30, 40, 50, 60, 20 };
 
