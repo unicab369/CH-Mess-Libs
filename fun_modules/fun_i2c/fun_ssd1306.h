@@ -802,9 +802,42 @@ void test_polys() {
 }
 
 
-void test_circles() {
-	int y = 0;
+u8 myvalues[16] = { 30, 50, 60, 40, 20, 50, 30, 10, 35, 10, 20, 30, 40, 50, 60, 20 };
+int y = 0;
 
+void ssd1306_draw_test() {
+	//# Test hor lines
+	for(int8_t i = 0; i<sizeof(myvalues); i++) {
+		u8 limit[] = { 0, myvalues[i] };
+		render_horLine(y, limit, 2, 0);
+		render_horLine(y, limit, 2, 1);
+		y += 4;
+	}
+
+	y = 0;
+	//# Test ver lines
+	for(int8_t i = 0; i<sizeof(myvalues); i++) {
+		u8 limit[] = { 0, myvalues[i] };
+		render_verLine(y, limit, 1, 0);
+		render_verLine(y, limit, 1, 1);
+		y += 4;
+	}
+
+	// //# Test lines
+	// for(u8 x=0; x<SSD1306_W; x+=16) {
+	// 	u8 point_a0[] = { x, 0 };
+	// 	u8 point_a1[] = { SSD1306_W, y };
+	// 	render_line(point_a0, point_a1, 2);
+
+	// 	u8 point_b0[] = { SSD1306_W-x, SSD1306_H };
+	// 	u8 point_b1[] = { 0, SSD1306_H-y };
+	// 	render_line(point_b0, point_b1, 2);
+
+	// 	y+= SSD1306_H/8;
+	// }
+
+	y = 0;
+	//# Test circles
 	for (int8_t i = 0; i<4; i++) {
 		u8 should_fill = i > 1 ? 1 : 0;
 		render_circle((u8[]){ 110, y }, 5, should_fill);
@@ -817,48 +850,6 @@ void test_circles() {
 	}
 
 	render_pie((u8[]){ 60, 55 }, 12, 0, 180);
-}
-
-
-u8 myvalues[16] = { 30, 50, 60, 40, 20, 50, 30, 10, 35, 10, 20, 30, 40, 50, 60, 20 };
-
-void _test_lines() {
-	int y = 0;
-	
-	// //# hor-ver lines
-	// for(int8_t i = 0; i<sizeof(myvalues); i++) {
-	// 	u8 limit[] = { 0, myvalues[i] };
-	// 	// render_horLine(y, limit, 2, 0);
-	// 	// render_horLine(y, limit, 2, 1);
-	// 	render_verLine(y, limit, 1, 0);
-	// 	render_verLine(y, limit, 1, 1);
-	// 	y += 4;
-	// }
-
-	//# line
-	for(u8 x=0; x<SSD1306_W; x+=16) {
-		u8 point_a0[] = { x, 0 };
-		u8 point_a1[] = { SSD1306_W, y };
-		render_line(point_a0, point_a1, 2);
-
-		u8 point_b0[] = { SSD1306_W-x, SSD1306_H };
-		u8 point_b1[] = { 0, SSD1306_H-y };
-		render_line(point_b0, point_b1, 2);
-
-		y+= SSD1306_H/8;
-	}
-}
-
-
-void ssd1306_draw_test() {
-	test_polys();
-	test_circles();
-	// _test_lines();
-
-	// ssd1306_vertical_line(&line, 2, 0);
-
-	// line.pos = 20;
-	// ssd1306_vertical_line(&line, 3, 0);
 
 	// ssd1306_draw_str("sz 8x8 testing", 0, 0);
 	// ssd1306_draw_str("testing 22222234fdafadfafa", 1, 0);
@@ -868,6 +859,8 @@ void ssd1306_draw_test() {
 	// ssd1306_draw_str("testing 66664fdafadfafa", 5, 0);
 	// ssd1306_draw_str("testing 77774fdafadfafa", 6, 0);
 	// ssd1306_draw_str("testing 88884fdafadfafa", 7, 0);
+
+	// test_polys();
 
 	ssd1306_drawAll();
 }
