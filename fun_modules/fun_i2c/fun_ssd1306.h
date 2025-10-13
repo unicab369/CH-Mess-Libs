@@ -364,16 +364,19 @@ typedef struct {
 } M_Point;
 
 //# render line (Bresenham's algorithm)
-void render_line(u8 p0[2], u8 p1[2], u8 thickness) {
+void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
+	u8 x0 = point_a[0], y0 = point_a[1];
+    u8 x1 = point_b[0], y1 = point_b[1];
+
 	// Clamp coordinates to display bounds
-	CLAMP_VALUES(p0[0], p1[0], SSD1306_W_LIMIT);
-	CLAMP_VALUES(p0[1], p1[1], SSD1306_H_LIMIT);
+	CLAMP_VALUES(x0, x1, SSD1306_W_LIMIT);
+	CLAMP_VALUES(y0, y1, SSD1306_H_LIMIT);
 
 	// Bresenham's line algorithm
-	s16 dx = ABS(p1[0] - p0[0]);
-	s16 dy = -ABS(p1[1] - p0[1]);
-	s16 sx = p0[0] < p1[0] ? 1 : -1;
-	s16 sy = p0[1] < p1[1] ? 1 : -1;
+	s16 dx = ABS(x1 - x0);
+	s16 dy = -ABS(y1 - y0);
+	s16 sx = x0 < x1 ? 1 : -1;
+	s16 sy = y0 < y1 ? 1 : -1;
 	s16 err = dx + dy;
 	s16 e2;
 
@@ -381,16 +384,16 @@ void render_line(u8 p0[2], u8 p1[2], u8 thickness) {
 		// Draw the pixel(s)
 		if (thickness == 1) {
 			// Fast path for single-pixel
-			if (p0[0] < SSD1306_W && p0[1] < SSD1306_H) {
-				M_Page_Mask mask = page_masks[p0[1]];
-				frame_buffer[mask.page * SSD1306_W + p0[0]] |= mask.bitmask;
+			if (x0 < SSD1306_W && y0 < SSD1306_H) {
+				M_Page_Mask mask = page_masks[y0];
+				frame_buffer[mask.page * SSD1306_W + x0] |= mask.bitmask;
 			}
 		} else {
 			// Calculate bounds (branchless min/max)
-			u8 x_start = p0[0];
-			u8 x_end = p0[0] + thickness - 1;
-			u8 y_start = p0[1];
-			u8 y_end = p0[1] + thickness - 1;
+			u8 x_start = x0;
+			u8 x_end = x0 + thickness - 1;
+			u8 y_start = y0;
+			u8 y_end = y0 + thickness - 1;
 			
 			CLAMP_VALUE(x_end, SSD1306_W_LIMIT);
 			CLAMP_VALUE(y_end, SSD1306_H_LIMIT);
@@ -419,10 +422,10 @@ void render_line(u8 p0[2], u8 p1[2], u8 thickness) {
 		}
 
 		// Bresenham Advance
-		if (p0[0] == p1[0] && p0[1] == p1[1]) break;
+		if (x0 == x1 && y0 == y1) break;
 		e2 = err << 1; // e2 = 2*err via bit shift
-		if (e2 >= dy) { err += dy; p0[0] += sx; }
-		if (e2 <= dx) { err += dx; p0[1] += sy; }
+		if (e2 >= dy) { err += dy; x0 += sx; }
+		if (e2 <= dx) { err += dx; y0 += sy; }
 	}
 }
 
@@ -431,57 +434,20 @@ void render_line(u8 p0[2], u8 p1[2], u8 thickness) {
 //! POLYGON FUNCTIONS
 //! ####################################
 
-//# render multiple lines
-void render_multiple_lines(M_Point *pts, u8 num_pts, u8 thickness) {
-	// Early exit if not enough points (need at least 2 points for a line)
-	if (num_pts < 2) return;
-	
-	// Draw connected lines between all points
-	for (u8 i = 0; i < num_pts - 1; i++) {
-		u8 p0[] = {pts[i].x, pts[i].y};
-		u8 p1[] = {pts[i+1].x, pts[i+1].y};
-		render_line(p0, p1, thickness);
-	}
-}
-
 //# render poligon
-void render_poly(M_Point *pts, u8 num_pts, u8 thickness) {
-	if (num_pts < 3) return;  // Need at least 3 points for a polygon
-	render_multiple_lines(pts, num_pts, thickness);
-
-	// Draw closing line
-	u8 p0[] = {pts[num_pts-1].x, pts[num_pts-1].y};
-	u8 p1[] = {pts[0].x, pts[0].y};
-	render_line(p0, p1, thickness);
-}
-
-
-
-//# render multiple lines
-void render_multiple_lines2(u8 pts[][2], u8 num_pts, u8 thickness) {
-    // Early exit if not enough points (need at least 2 points for a line)
-    if (num_pts < 2) return;
-    
-    // Draw connected lines between all points
-    for (u8 i = 0; i < num_pts - 1; i++) {
-        // Directly pass the array rows - no need to create temporary arrays
-        render_line(pts[i], pts[i+1], thickness);
-    }
-}
-
-//# render poligon
-void render_poly2(u8 pts[][2], u8 num_pts, u8 thickness) {
+void render_poly(u8 pts[][2], u8 num_pts, u8 thickness) {
     if (num_pts < 3) return;  // Need at least 3 points for a polygon
-    render_multiple_lines(pts, num_pts, thickness);
+
+	for (u8 i = 0; i < num_pts - 1; i++) {
+		render_line(pts[i], pts[i+1], thickness);
+	}
 
     // Draw closing line - directly use array rows
     render_line(pts[num_pts-1], pts[0], thickness);
 }
 
-
-
-//# optimized: render filled polygon
-void render_solid_poly(M_Point *pts, u8 num_pts) {
+//# render filled polygon
+void render_solid_poly(u8 pts[][2], u8 num_pts) {
 	// ===== [1] EDGE EXTRACTION =====
 	struct Edge {
 		u8 y_start, y_end;
@@ -494,17 +460,17 @@ void render_solid_poly(M_Point *pts, u8 num_pts) {
 	// Build edge table and find Y bounds
 	for (u8 i = 0, j = num_pts-1; i < num_pts; j = i++) {
 		// Skip horizontal edges (don't affect filling)
-		if (pts[i].y == pts[j].y) continue;
+		if (pts[i][1] == pts[j][1]) continue;
 
 		// Determine edge direction
 		u8 y0, y1;
 		u16 x0;
-		if (pts[i].y < pts[j].y) {
-			y0 = pts[i].y; y1 = pts[j].y;
-			x0 = pts[i].x;
+		if (pts[i][1] < pts[j][1]) {
+			y0 = pts[i][1]; y1 = pts[j][1];
+			x0 = pts[i][0];
 		} else {
-			y0 = pts[j].y; y1 = pts[i].y;
-			x0 = pts[j].x;
+			y0 = pts[j][1]; y1 = pts[i][1];
+			x0 = pts[j][0];
 		}
 
 		// Update global Y bounds
@@ -516,7 +482,7 @@ void render_solid_poly(M_Point *pts, u8 num_pts) {
 			.y_start = y0,
 			.y_end = y1,
 			.x_start = x0 << 8,
-			.dx_dy = ((pts[j].x - pts[i].x) << 8) / (pts[j].y - pts[i].y)
+			.dx_dy = ((pts[j][0] - pts[i][0]) << 8) / (pts[j][1] - pts[i][1])
 		};
 	}
 
@@ -560,38 +526,40 @@ typedef struct {
 
 //# render rectangle
 void render_rect(
-	M_Point p0, Area area, u8 fill, u8 mirror
+	u8 p0[2], Area area, u8 fill, u8 mirror
 ) {
+	u8 x = p0[0], y = p0[1];
+
 	// Validate coordinates
-	if (p0.x >= SSD1306_W || p0.y >= SSD1306_H) return;
+	if (x >= SSD1306_W || y >= SSD1306_H) return;
 
 	// Clamp to display bounds
-	u16 x_end = p0.x + area.w;
-	u16 y_end = p0.y + area.h;
-	if (x_end >= SSD1306_W) area.w = SSD1306_W_LIMIT - p0.x;
-	if (y_end >= SSD1306_H) area.h = SSD1306_H_LIMIT - p0.y;
+	u16 x_end = x + area.w;
+	u16 y_end = y + area.h;
+	if (x_end >= SSD1306_W) area.w = SSD1306_W_LIMIT - x;
+	if (y_end >= SSD1306_H) area.h = SSD1306_H_LIMIT - y;
 
 	// Handle mirroring
 	if (mirror) {
-		p0.x = SSD1306_W_LIMIT - p0.x;
+		x = SSD1306_W_LIMIT - x;
 		area.w = SSD1306_W_LIMIT - area.w;
 	}
 
 	// Draw rectangle with optional fill
-	u8 x_limit[] = { p0.x, x_end };
+	u8 x_limit[] = { x, x_end };
 
 	if (fill) {
 		// Filled rectangle using horizontal lines (faster for row-major displays)
-		for (u8 y_pos = p0.y; y_pos <= y_end; y_pos++) {
+		for (u8 y_pos = y; y_pos <= y_end; y_pos++) {
 			render_horLine(y_pos, x_limit, 1, 0);
 		}
 	} else {
-		u8 y_limit[] = { p0.y + 1, y_end - 1 };
+		u8 y_limit[] = { y + 1, y_end - 1 };
 
 		// Outline only
-		render_horLine(p0.y, x_limit, 1, 0);	 	// Top edge
+		render_horLine(y, x_limit, 1, 0);	 	// Top edge
 		render_horLine(y_end, x_limit, 1, 0);		// Bottom edge
-		render_verLine(p0.x, y_limit, 1, 0); 		// Left edge
+		render_verLine(x, y_limit, 1, 0); 		// Left edge
 		render_verLine(x_end, y_limit, 1, 0); 		// Right edge
 	}
 }
@@ -804,7 +772,7 @@ void test_polys() {
 	//# rectangles
 	for (int8_t i = 0; i<4; i++) {
 		u8 should_fill = i > 1 ? 1 : 0;
-		render_rect((M_Point){ 84, y }, (Area) { 15, 5 }, should_fill, 0);
+		render_rect((u8[]){ 84, y }, (Area) { 15, 5 }, should_fill, 0);
 		y += 7;
 	}
 
@@ -826,7 +794,7 @@ void test_polys() {
 	for (int i = 0; i < sizeof(zigzag)/sizeof(zigzag[0]); i++) {
 		zigzag2[i][1] += 24;  // Add 20 to each x-coordinate
 	}
-	render_poly2(zigzag2, pt_count, 1);
+	render_poly(zigzag2, pt_count, 1);
 
 	//# star
 	// Concave polygon: Star (22px tall)
@@ -850,7 +818,7 @@ void test_polys() {
 	for (int i = 0; i < pt_count; i++) {
 		star[i][0] += 25;  // Add 20 to each x-coordinate
 	}
-	render_poly2(star, pt_count, 1);
+	render_poly(star, pt_count, 1);
 
 	//# quad
 	// Convex polygon: Quad (12px tall)
@@ -871,7 +839,7 @@ void test_polys() {
 	for (int i = 0; i < pt_count; i++) {
 		quad2[i][0] += 25;  // Add 20 to each x-coordinate
 	}
-	render_poly2(quad2, pt_count, 1);
+	render_poly(quad2, pt_count, 1);
 
 	//# hourglass
 	// Self-intersecting: Hourglass (12px tall)
@@ -892,7 +860,7 @@ void test_polys() {
 	for (int i = 0; i < pt_count; i++) {
 		hourglass2[i][0] += 25;  // Add 20 to each x-coordinate
 	}
-	render_poly2(hourglass2, pt_count, 1);
+	render_poly(hourglass2, pt_count, 1);
 }
 
 
@@ -946,7 +914,7 @@ void _test_lines() {
 
 void ssd1306_draw_test() {
 	test_polys();
-	// test_circles();
+	test_circles();
 	// _test_lines();
 
 	// ssd1306_vertical_line(&line, 2, 0);
