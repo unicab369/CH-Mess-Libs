@@ -454,75 +454,46 @@ void render_poly(u8 pts[][2], u8 num_pts, u8 thickness) {
 
 //# render filled polygon
 void render_solid_poly(u8 pts[][2], u8 num_pts) {
-	// ===== [1] EDGE EXTRACTION =====
-	struct Edge {
-		u8 y_start, y_end;
-		u16 x_start, dx_dy;
-	} edges[num_pts];
+    // Find bounding box
+    u8 y_min = SSD1306_H, y_max = 0;
 
-	u8 edge_count = 0;
-	u8 y_min = 255, y_max = 0;
-
-	// Build edge table and find Y bounds
-	for (u8 i = 0, j = num_pts-1; i < num_pts; j = i++) {
-		// Skip horizontal edges (don't affect filling)
-		if (pts[i][1] == pts[j][1]) continue;
-
-		// Determine edge direction
-		u8 y0, y1;
-		u16 x0;
-		if (pts[i][1] < pts[j][1]) {
-			y0 = pts[i][1]; y1 = pts[j][1];
-			x0 = pts[i][0];
-		} else {
-			y0 = pts[j][1]; y1 = pts[i][1];
-			x0 = pts[j][0];
-		}
-
-		// Update global Y bounds
-		y_min = y0 < y_min ? y0 : y_min;
-		y_max = y1 > y_max ? y1 : y_max;
-
-		// Store edge (dx/dy as fixed-point 8.8)
-		edges[edge_count++] = (struct Edge){
-			.y_start = y0,
-			.y_end = y1,
-			.x_start = x0 << 8,
-			.dx_dy = ((pts[j][0] - pts[i][0]) << 8) / (pts[j][1] - pts[i][1])
-		};
-	}
-
-	// ===== [2] SCANLINE PROCESSING =====
-	for (u8 y = y_min; y <= y_max; y++) {
-		u8 x_list[8];  // Supports 4 edge crossings (99% of cases)
-		u8 x_count = 0;
-
-		// Collect active edges
-		for (u8 e = 0; e < edge_count; e++) {
-			if (y >= edges[e].y_start && y < edges[e].y_end) {
-				x_list[x_count++] = edges[e].x_start >> 8;
-				edges[e].x_start += edges[e].dx_dy;  // Step X
-			}
-		}
-
-		// Insertion sort (optimal for small N)
-		for (u8 i = 1; i < x_count; i++) {
-			u8 val = x_list[i];
-			int8_t j = i-1;
-			while (j >= 0 && x_list[j] > val) {
-				x_list[j+1] = x_list[j];
-				j--;
-			}
-			x_list[j+1] = val;
-		}
-
-		// Fill between pairs (with bounds checking)
-		for (u8 i = 0; i+1 < x_count; i += 2) {
-			u8 x1 = x_list[i] < SSD1306_W ? x_list[i] : SSD1306_W-1;
-			u8 x2 = x_list[i+1] < SSD1306_W ? x_list[i+1] : SSD1306_W-1;
-			if (x1 < x2) render_fastHorLine(y, x1, x2);
-		}
-	}
+    for (u8 i = 0; i < num_pts; i++) {
+        if (pts[i][1] < y_min) y_min = pts[i][1];
+        if (pts[i][1] > y_max) y_max = pts[i][1];
+    }
+    
+    for (u8 y = y_min; y <= y_max; y++) {
+        u8 intersections[8];
+        u8 count = 0;
+        
+        // Simple intersection detection
+        for (u8 i = 0, j = num_pts-1; i < num_pts; j = i++) {
+            u8 y1 = pts[i][1], y2 = pts[j][1];
+            
+            if ((y1 <= y && y < y2) || (y2 <= y && y < y1)) {
+                u8 x1 = pts[i][0], x2 = pts[j][0];
+                // Simple interpolation (good enough for small polygons)
+                u8 x = x1 + ((x2 - x1) * (y - y1)) / (y2 - y1 + 1);
+                intersections[count++] = x;
+            }
+        }
+        
+        // Simple bubble sort
+        for (u8 i = 0; i < count-1; i++) {
+            for (u8 j = i+1; j < count; j++) {
+                if (intersections[i] > intersections[j]) {
+                    u8 temp = intersections[i];
+                    intersections[i] = intersections[j];
+                    intersections[j] = temp;
+                }
+            }
+        }
+        
+        // Fill between pairs
+        for (u8 i = 0; i+1 < count; i += 2) {
+            render_fastHorLine(y, intersections[i], intersections[i+1]);
+        }
+    }
 }
 
 //# render rectangle
@@ -671,7 +642,6 @@ void render_ring(u8 point[2], u8 radius, u8 thickness) {
 		_render_circle_with_func(point, inner_radius, render_fastHorLine_erase);
     }
 }
-
 
 //# render pie
 // Helper function to get circle point using SIN_LUT
