@@ -431,7 +431,7 @@ void render_line(u8 p0[2], u8 p1[2], u8 thickness) {
 //! POLYGON FUNCTIONS
 //! ####################################
 
-//# render lines
+//# render multiple lines
 void render_multiple_lines(M_Point *pts, u8 num_pts, u8 thickness) {
 	// Early exit if not enough points (need at least 2 points for a line)
 	if (num_pts < 2) return;
@@ -454,6 +454,31 @@ void render_poly(M_Point *pts, u8 num_pts, u8 thickness) {
 	u8 p1[] = {pts[0].x, pts[0].y};
 	render_line(p0, p1, thickness);
 }
+
+
+
+//# render multiple lines
+void render_multiple_lines2(u8 pts[][2], u8 num_pts, u8 thickness) {
+    // Early exit if not enough points (need at least 2 points for a line)
+    if (num_pts < 2) return;
+    
+    // Draw connected lines between all points
+    for (u8 i = 0; i < num_pts - 1; i++) {
+        // Directly pass the array rows - no need to create temporary arrays
+        render_line(pts[i], pts[i+1], thickness);
+    }
+}
+
+//# render poligon
+void render_poly2(u8 pts[][2], u8 num_pts, u8 thickness) {
+    if (num_pts < 3) return;  // Need at least 3 points for a polygon
+    render_multiple_lines(pts, num_pts, thickness);
+
+    // Draw closing line - directly use array rows
+    render_line(pts[num_pts-1], pts[0], thickness);
+}
+
+
 
 //# optimized: render filled polygon
 void render_solid_poly(M_Point *pts, u8 num_pts) {
@@ -784,28 +809,28 @@ void test_polys() {
 	}
 
 	//# zigzag
-	M_Point zigzag[] = {
-		(M_Point) { 60, 8 },
-		(M_Point) { 50, 15 },
-		(M_Point) { 80, 8 },
-		(M_Point) { 70, 0 },
-		(M_Point) { 70, 20 }
+	u8 zigzag[][2] = {
+		{ 60, 8 },
+		{ 50, 15 },
+		{ 80, 8 },
+		{ 70, 0 },
+		{ 70, 20 }
 	};
 
-	u8 pt_count = sizeof(zigzag)/sizeof(M_Point);
+	u8 pt_count = sizeof(zigzag)/sizeof(zigzag[0]);
 	render_solid_poly(zigzag, pt_count);
 
-	M_Point zigzag2[4];
+	u8 zigzag2[5][2];
 	memcpy(zigzag2, zigzag, sizeof(zigzag));  // Fast copy
 
-	for (int i = 0; i < sizeof(zigzag)/sizeof(M_Point); i++) {
-		zigzag2[i].y += 24;  // Add 20 to each x-coordinate
+	for (int i = 0; i < sizeof(zigzag)/sizeof(zigzag[0]); i++) {
+		zigzag2[i][1] += 24;  // Add 20 to each x-coordinate
 	}
-	render_poly(zigzag2, pt_count, 1);
+	render_poly2(zigzag2, pt_count, 1);
 
-
+	//# star
 	// Concave polygon: Star (22px tall)
-	M_Point star[] = {
+	u8 star[][2] = {
 		{12 , 0},  // Top point
 		{16 , 8}, // Right upper
 		{24 , 8}, // Right outer
@@ -818,57 +843,56 @@ void test_polys() {
 		{8  , 8}   // Left upper
 	};
 
+	pt_count = sizeof(star)/sizeof(star[0]);
+	render_solid_poly(star, pt_count);
+
+	// Shift star right by 25px
+	for (int i = 0; i < pt_count; i++) {
+		star[i][0] += 25;  // Add 20 to each x-coordinate
+	}
+	render_poly2(star, pt_count, 1);
+
+	//# quad
 	// Convex polygon: Quad (12px tall)
-	static M_Point quad[] = {
+	static u8 quad[][2] = {
 		{6  , 24},  // Bottom-left (aligned with star's left)
 		{18 , 24}, // Bottom-right (centered)
 		{22 , 34}, // Top-right (matches star width - unchanged)
 		{2  , 34}   // Top-left (aligned - unchanged)
 	};
 
+	pt_count = sizeof(quad)/sizeof(quad[0]);
+	render_solid_poly(quad, pt_count);
+
+	// Shift quad right by 25px
+	u8 quad2[4][2];
+	memcpy(quad2, quad, sizeof(quad));  // Fast copy
+
+	for (int i = 0; i < pt_count; i++) {
+		quad2[i][0] += 25;  // Add 20 to each x-coordinate
+	}
+	render_poly2(quad2, pt_count, 1);
+
+	//# hourglass
 	// Self-intersecting: Hourglass (12px tall)
-	static M_Point hourglass[] = {
+	static u8 hourglass[][2] = {
 		{6  , 38},   // Top-left (aligned with quad's bottom-left)
 		{18 , 38},  // Top-right (aligned with quad's bottom-right)
 		{6  , 52},   // Bottom-left
 		{18 , 52}   // Bottom-right
 	};
 
-	//# star
-	pt_count = sizeof(star)/sizeof(M_Point);
-	render_solid_poly(star, pt_count);
-
-	// Shift star right by 25px
-	for (int i = 0; i < sizeof(star)/sizeof(M_Point); i++) {
-		star[i].x += 25;  // Add 20 to each x-coordinate
-	}
-	render_poly(star, pt_count, 1);
-
-	//# quad
-	pt_count = sizeof(quad)/sizeof(M_Point);
-	render_solid_poly(quad, pt_count);
-
-	// Shift quad right by 25px
-	M_Point quad2[4];
-	memcpy(quad2, quad, sizeof(quad));  // Fast copy
-
-	for (int i = 0; i < sizeof(quad)/sizeof(M_Point); i++) {
-		quad2[i].x += 25;  // Add 20 to each x-coordinate
-	}
-	render_poly(quad2, pt_count, 1);
-
-	//# hourglass
-	pt_count = sizeof(hourglass)/sizeof(M_Point);
+	pt_count = sizeof(hourglass)/sizeof(hourglass[0]);
 	render_solid_poly(hourglass, pt_count);
 
 	// Shift hourglass right by 25px
-	M_Point hourglass2[4];
+	u8 hourglass2[4][2];
 	memcpy(hourglass2, hourglass, sizeof(hourglass));  // Fast copy
 
-	for (int i = 0; i < sizeof(hourglass)/sizeof(M_Point); i++) {
-		hourglass2[i].x += 25;  // Add 20 to each x-coordinate
+	for (int i = 0; i < pt_count; i++) {
+		hourglass2[i][0] += 25;  // Add 20 to each x-coordinate
 	}
-	render_poly(hourglass2, pt_count, 1);
+	render_poly2(hourglass2, pt_count, 1);
 }
 
 
