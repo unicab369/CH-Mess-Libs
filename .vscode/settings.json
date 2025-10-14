@@ -10,7 +10,8 @@
         "fun_irreceiver.h": "c",
         "lib_i2c.h": "c",
         "fun_ssd1306.h": "c",
-        "fun_irreceivernec.h": "c"
+        "fun_irreceivernec.h": "c",
+        "fun_encoder_gpio.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

@@ -27,6 +27,9 @@
 #include "ch32fun.h"
 #include "word_font.h"
 
+// enable 0.5 scale for text string
+#define SSD1306_USE_05TEXT_SCALE
+
 #define SSD1306_128X64
 
 // characteristics of each type
@@ -55,7 +58,7 @@
 #endif
 
 #ifndef SSD1306_MAX_STR_LEN
-	#define SSD1306_MAX_STR_LEN 25
+	#define SSD1306_MAX_STR_LEN 21
 #endif
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
@@ -183,9 +186,6 @@ u8 ssd1306_init() {
 		page_masks[y].bitmask	= 1 << (y & 0x07);	// (y % 8)
 	}
 
-	//# Clear the frame buffer
-	// ssd1306_fill(0xFF);
-
 	return 0;
 }
 
@@ -257,7 +257,7 @@ void ssd1306_draw_all() {
 	ssd1306_draw_area(0, 7, 0, SSD1306_W);
 }
 
-void ssd1306_fill(u8 value) {
+void ssd1306_render_fill(u8 value) {
 	memset(SSD1306_BUF, value, sizeof(SSD1306_BUF));
 }
 
@@ -287,73 +287,13 @@ typedef struct {
 	u8 color;
 } Str_Config_t;
 
-//# Draw string with size
-void _render_scaled_text(
-	u8 x, u8 y, const char *str,
-	Str_Config_t *config, void (*pixel_func)(u8 x, u8 y)
-) {
-	// Early exit if starting position is off-screen
-    if (x >= SSD1306_W || y >= SSD1306_H) return;
-	
-	u8 space_offset = config->scale * config->WIDTH + config->SPACE;
-    
-    while (*str) {
-        u8 c = *str++;
-        if (c < 32 || c > 127) c = '?';
-        u8 char_index = c - 32;
-        u16 char_pos = char_index * config->WIDTH;
-
-        for (u8 col = 0; col < config->WIDTH; col++) {
-            u8 glyph = config->FONT[char_pos + col];
-
-            for (u8 row = 0; row < config->HEIGHT; row++) {
-                // Determine if we should draw based on color mode
-                u8 draw_pixel = (glyph & (1 << row));
-                
-                if (draw_pixel) {
-                    u8 col_value = col * config->scale;
-                    u8 row_value = row * config->scale;
-
-                    for (u8 dx = 0; dx < config->scale; dx++) {
-                        for (u8 dy = 0; dy < config->scale; dy++) {
-							pixel_func(x + dx + col_value, y + dy + row_value);
-                        }
-                    }
-                }
-            }
-        }
-
-        x += space_offset;
-    }
-}
-
 typedef struct {
 	u8 max_x;
 	u8 max_y;
 } SSD1306_Text_Bounds_t;
 
-SSD1306_Text_Bounds_t _calc_text_bounds(
-	u8 char_count, u8 x, u8 y, Str_Config_t *config
-) {
-    if (!config || char_count < 1) return;
-    SSD1306_Text_Bounds_t bounds = {0};
 
-    // Calculate total width: (chars * width * scale) + (spaces between chars)
-    u8 width = (char_count * config->WIDTH * config->scale) + 
-                     ((char_count - 1) * config->SPACE);
-    u8 height = config->HEIGHT * config->scale;
-    
-    // Calculate maximum bounds
-    bounds.max_x = x + width;
-    bounds.max_y = y + height - 1;  // -1 because coordinates are 0-indexed
-    
-    // Clamp to screen bounds
-	CLAMP_VALUE(bounds.max_x, SSD1306_W_LIMIT);
-	CLAMP_VALUE(bounds.max_y, SSD1306_H_LIMIT);
-    
-	return bounds;
-}
-
+//* Clear text bounds
 void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds, u8 fill) {    
     u8 x_count = bounds->max_x - x + 1;
 	u8 max_y = bounds->max_y;
@@ -386,9 +326,108 @@ void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds, u8 fill) {
     }
 }
 
+//* Calculate text bounds
+SSD1306_Text_Bounds_t _calc_text_bounds(
+	u8 char_count, u8 x, u8 y, Str_Config_t *config
+) {
+	SSD1306_Text_Bounds_t bounds = {0};
+    if (!config || char_count < 1) return bounds;
+
+	u16 scaled_width, scaled_height;
+
+	#ifdef SSD1306_USE_05TEXT_SCALE
+		// Scaling formula: width = base_width * (1 + (scale-1)*0.5)
+		// In integer math: width = (base_width * (scale + 1)) / 2
+		scaled_width = config->WIDTH * (config->scale + 1) / 2;		// add 2 for rounding UP
+		scaled_height = config->HEIGHT * (config->scale + 1) / 2; 	// add 2 for rounding UP
+	#else
+		// Calculate total width: (chars * width * scale) + (spaces between chars)
+		scaled_width = config->WIDTH * config->scale;
+		scaled_height = config->HEIGHT * config->scale;
+	#endif
+
+    u8 width = (char_count * scaled_width) + ((char_count - 1) * config->SPACE);
+    u8 height = scaled_height;
+    
+    // Calculate maximum bounds
+    bounds.max_x = x + width;
+    bounds.max_y = y + height - 1;  // -1 because coordinates are 0-indexed
+    
+    // Clamp to screen bounds
+	CLAMP_VALUE(bounds.max_x, SSD1306_W_LIMIT);
+	CLAMP_VALUE(bounds.max_y, SSD1306_H_LIMIT);
+    
+	return bounds;
+}
+
+//# Render string with size
+void ssd1306_render_scaled_txt(
+	u8 x, u8 y, const char *str,
+	Str_Config_t *config, void (*pixel_func)(u8 x, u8 y)
+) {
+	// Early exit if starting position is off-screen
+    if (x >= SSD1306_W || y >= SSD1306_H) return;
+
+	#ifdef SSD1306_USE_05TEXT_SCALE
+		u8 char_width_scaled = (config->WIDTH * (config->scale + 1)) / 2;
+	#else
+		u8 char_width_scaled = config->WIDTH * config->scale;
+    #endif
+
+	u8 space_offset = char_width_scaled + config->SPACE;
+
+    while (*str) {
+        u8 c = *str++;
+        if (c < 32 || c > 127) c = '?';
+        u8 char_index = c - 32;
+        u16 char_pos = char_index * config->WIDTH;
+
+		//# loop by Width and Height
+        for (u8 col = 0; col < config->WIDTH; col++) {
+            u8 glyph = config->FONT[char_pos + col];
+
+            for (u8 row = 0; row < config->HEIGHT; row++) {
+                if (glyph & (1 << row)) {
+					//# draw the glyth bit - expand by scale
+
+					#ifdef SSD1306_USE_05TEXT_SCALE
+						// Calculate start and end positions using the full scaling formula
+						u8 start_col = (col * (config->scale + 1)) / 2;
+						u8 end_col = ((col + 1) * (config->scale + 1)) / 2;
+						u8 start_row = (row * (config->scale + 1)) / 2;
+						u8 end_row = ((row + 1) * (config->scale + 1)) / 2;
+						
+						// Fill the rectangular block
+						for (u8 tc = start_col; tc < end_col; tc++) {
+							for (u8 tr = start_row; tr < end_row; tr++) {
+								pixel_func(x + tc, y + tr);
+							}
+						}
+					#else
+						u8 col_value = col * config->scale;
+						u8 row_value = row * config->scale;
+
+						for (u8 dx = 0; dx < config->scale; dx++) {
+							for (u8 dy = 0; dy < config->scale; dy++) {
+								pixel_func(x + dx + col_value, y + dy + row_value);
+							}
+						}
+					#endif
+                }
+            }
+        }
+
+		//# update x and early exit for next char
+        x += space_offset;
+		if (x >= SSD1306_W) break;
+    }
+}
+
+//# Draw string with size
 void ssd1306_draw_scaled_text(
 	u8 x, u8 y, const char *str, Str_Config_t *config
 ) {
+	// SSD1306_Text_Bounds_t bounds = _calc_text_bound05(strlen(str), x, y, config);
 	SSD1306_Text_Bounds_t bounds = _calc_text_bounds(strlen(str), x, y, config);
 	// printf("mx: %d, my: %d, page: %d\n", bounds.max_x, bounds.max_y, bounds.max_page);
 
@@ -402,9 +441,9 @@ void ssd1306_draw_scaled_text(
 	moment = micros();
 
     if (config->color == 0) {
-		_render_scaled_text(x, y, str, config, render_pixel_erase);
+		ssd1306_render_scaled_txt(x, y, str, config, render_pixel_erase);
     } else {
-		_render_scaled_text(x, y, str, config, render_pixel);
+		ssd1306_render_scaled_txt(x, y, str, config, render_pixel);
 	}
 	
 	u32 render_elapsed = micros() - moment;
