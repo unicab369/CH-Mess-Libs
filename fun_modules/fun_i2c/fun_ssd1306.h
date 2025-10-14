@@ -58,12 +58,35 @@
 	#define SSD1306_MAX_STR_LEN 25
 #endif
 
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+
+#define SORT_LIMITS(limits) \
+    if ((limits)[0] > (limits)[1]) { \
+        u8 temp = (limits)[0]; \
+        (limits)[0] = (limits)[1]; \
+        (limits)[1] = temp; \
+    }
+
+#define MIRROR_VALUES(values, max) \
+	(values)[0] = max - (values)[0]; \
+	(values)[1] = max - (values)[1];
+
+#define CLAMP_VALUE(value, max) \
+	if (value > max) value = max;
+
+#define CLAMP_VALUES(value0, value1, max) \
+	if (value0 > max) value0 = max; \
+	if (value1 > max) value1 = max;
+
+
+
 //# INTERFACES
 /* send OLED command byte */
 u8 SSD1306_CMD(u8 cmd);
 
 /* send OLED data packet (up to 32 bytes) */
 u8 SSD1306_DATA(u8 *data, int sz);
+
 
 //! ####################################
 //! MAIN FUNCTIONS
@@ -210,10 +233,10 @@ void ssd1306_draw_str(const char *str, u8 page, u8 column) {
 }
 
 //# Draw area
-void ssd1306_drawArea(
-	u8 start_page, u8 end_page,
-	u8 col_start, u8 col_end
+void ssd1306_draw_area(
+	u8 start_page, u8 end_page, u8 col_start, u8 col_end
 ) {
+	
 	ssd1306_setwindow(start_page, end_page, col_start, col_end-1);
 
     for (u8 page = start_page; page <= end_page; page++) {
@@ -231,8 +254,8 @@ void ssd1306_drawArea(
 }
 
 //# Draw the entire frame
-void ssd1306_drawAll() {
-	ssd1306_drawArea(0, 7, 0, SSD1306_W);
+void ssd1306_draw_all() {
+	ssd1306_draw_area(0, 7, 0, SSD1306_W);
 }
 
 void ssd1306_fill(u8 value) {
@@ -256,26 +279,6 @@ void render_pixel_erase(u8 x, u8 y) {
 //! ####################################
 //! CUSTOM STRING FUNCTIONS
 //! ####################################
-
-#define ABS(x) ((x) < 0 ? -(x) : (x))
-
-#define SORT_LIMITS(limits) \
-    if ((limits)[0] > (limits)[1]) { \
-        u8 temp = (limits)[0]; \
-        (limits)[0] = (limits)[1]; \
-        (limits)[1] = temp; \
-    }
-
-#define MIRROR_VALUES(values, max) \
-	(values)[0] = max - (values)[0]; \
-	(values)[1] = max - (values)[1];
-
-#define CLAMP_VALUE(value, max) \
-	if (value > max) value = max;
-
-#define CLAMP_VALUES(value0, value1, max) \
-	if (value0 > max) value0 = max; \
-	if (value1 > max) value1 = max;
 
 typedef struct {
 	u8 *FONT;
@@ -324,31 +327,36 @@ void ssd1306_render_scaled_text(
     }
 }
 
-void _calc_text_bounds(
-	u8 char_count, u8 x, u8 y, Str_Config_t *config, u8 *max_x, u8 *max_y
+typedef struct {
+	u8 max_x;
+	u8 max_y;
+} SSD1306_Text_Bounds_t;
+
+SSD1306_Text_Bounds_t _calc_text_bounds(
+	u8 char_count, u8 x, u8 y, Str_Config_t *config
 ) {
     if (!config || char_count < 1) return;
-    
+    SSD1306_Text_Bounds_t bounds = {0};
+
     // Calculate total width: (chars * width * scale) + (spaces between chars)
-    u8 total_width = (char_count * config->WIDTH * config->scale) + 
+    u8 width = (char_count * config->WIDTH * config->scale) + 
                      ((char_count - 1) * config->SPACE);
-    u8 total_height = config->HEIGHT * config->scale;
+    u8 height = config->HEIGHT * config->scale;
     
     // Calculate maximum bounds
-    u8 calculated_max_x = x + total_width;
-    u8 calculated_max_y = y + total_height - 1;  // -1 because coordinates are 0-indexed
+    bounds.max_x = x + width;
+    bounds.max_y = y + height - 1;  // -1 because coordinates are 0-indexed
     
     // Clamp to screen bounds
-	CLAMP_VALUE(calculated_max_x, SSD1306_W_LIMIT);
-	CLAMP_VALUE(calculated_max_y, SSD1306_H_LIMIT);
+	CLAMP_VALUE(bounds.max_x, SSD1306_W_LIMIT);
+	CLAMP_VALUE(bounds.max_y, SSD1306_H_LIMIT);
     
-    // Return results
-    if (max_x) *max_x = calculated_max_x;
-    if (max_y) *max_y = calculated_max_y;
+	return bounds;
 }
 
-void _clear_text_bounds(u8 x, u8 y, u8 max_x, u8 max_y) {    
-    u8 x_count = max_x - x + 1;
+void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds) {    
+    u8 x_count = bounds->max_x - x + 1;
+	u8 max_y = bounds->max_y;
     
     // Use page_masks to build combined bitmasks per page
     for (u8 page = 0; page < SSD1306_PAGES; page++) {
@@ -376,14 +384,25 @@ void _clear_text_bounds(u8 x, u8 y, u8 max_x, u8 max_y) {
 void ssd1306_draw_scaled_text(
 	u8 x, u8 y, const char *str, Str_Config_t *config
 ) {
-	u8 max_x, max_y;
-	_calc_text_bounds(strlen(str), x, y, config, &max_x, &max_y);
+	SSD1306_Text_Bounds_t bounds = _calc_text_bounds(strlen(str), x, y, config);
+	// printf("mx: %d, my: %d, page: %d\n", bounds.max_x, bounds.max_y, bounds.max_page);
 
 	u32 start_time = micros();
-	_clear_text_bounds(x, y, max_x, max_y);
-	printf("Clear time: %d us\n", micros() - start_time);
+	_clear_text_bounds(x, y, &bounds);
+	u32 clear_elapsed = micros() - start_time;
 
+	start_time = micros();
 	ssd1306_render_scaled_text(x, y, str, config);
+	u32 render_elapsed = micros() - start_time;
+	
+	start_time = micros();
+	u8 min_page = y>>3;
+	u8 max_page = bounds.max_y>>3;
+	ssd1306_draw_area(min_page, max_page, x, bounds.max_x);
+	u32 draw_elapsed = micros() - start_time;
+
+	printf("\nclear (%d), render (%d), draw (%d) in us\n", 
+			clear_elapsed, render_elapsed, draw_elapsed);
 }
 
 
@@ -982,5 +1001,5 @@ void ssd1306_draw_test() {
 
 	// test_polys();
 
-	ssd1306_drawAll();
+	ssd1306_draw_all();
 }

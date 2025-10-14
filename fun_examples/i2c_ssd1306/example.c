@@ -83,7 +83,7 @@ int main() {
 
 			time_ref = millis();
 			// ssd1306_draw_test();
-			ssd1306_drawAll();
+			ssd1306_draw_all();
 		
 			printf("elapsed: %d ms\n", millis() - time_ref);
 		}
@@ -100,7 +100,7 @@ int main() {
 		.HEIGHT = 7,
 		.SPACE = 1,
 		.scale = 2,
-		.color = 1,
+		.color = 0,
 	};
 
 	while(1) {
@@ -112,10 +112,6 @@ int main() {
 			ssd1306_draw_scaled_text(0, 0, str_output, &str_conf);
 
 			// test_lines();
-			u32 time_ref2 = millis();
-			ssd1306_drawAll();
-			// printf("elapsed: %d ms\n", millis() - time_ref2);
-
 			time_ref = millis();
 		}
 
