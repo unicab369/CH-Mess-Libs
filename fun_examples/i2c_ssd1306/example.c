@@ -100,7 +100,7 @@ int main() {
 		.HEIGHT = 7,
 		.SPACE = 1,
 		.scale = 2,
-		.color = 0,
+		.color = 1,
 	};
 
 	while(1) {
@@ -122,3 +122,6 @@ int main() {
 		fun_encoder_gpio_task(moment, &encoder_b, onHandle_Encoder);
 	}
 }
+
+        //    FLASH:        5692 B        16 KB     34.74%
+        //      RAM:        1212 B         2 KB     59.18%

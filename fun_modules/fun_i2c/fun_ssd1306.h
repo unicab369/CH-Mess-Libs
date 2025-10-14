@@ -236,7 +236,6 @@ void ssd1306_draw_str(const char *str, u8 page, u8 column) {
 void ssd1306_draw_area(
 	u8 start_page, u8 end_page, u8 col_start, u8 col_end
 ) {
-	
 	ssd1306_setwindow(start_page, end_page, col_start, col_end-1);
 
     for (u8 page = start_page; page <= end_page; page++) {
@@ -289,9 +288,13 @@ typedef struct {
 } Str_Config_t;
 
 //# Draw string with size
-void ssd1306_render_scaled_text(
-	u8 x, u8 y, const char *str, Str_Config_t *config
+void _render_scaled_text(
+	u8 x, u8 y, const char *str,
+	Str_Config_t *config, void (*pixel_func)(u8 x, u8 y)
 ) {
+	// Early exit if starting position is off-screen
+    if (x >= SSD1306_W || y >= SSD1306_H) return;
+	
 	u8 space_offset = config->scale * config->WIDTH + config->SPACE;
     
     while (*str) {
@@ -307,16 +310,13 @@ void ssd1306_render_scaled_text(
                 // Determine if we should draw based on color mode
                 u8 draw_pixel = (glyph & (1 << row));
                 
-                // In inverted mode, we draw the background instead of the text
-                if (config->color == 0) draw_pixel = !draw_pixel; // Flip for inversion
-                
                 if (draw_pixel) {
                     u8 col_value = col * config->scale;
                     u8 row_value = row * config->scale;
 
                     for (u8 dx = 0; dx < config->scale; dx++) {
                         for (u8 dy = 0; dy < config->scale; dy++) {
-                            render_pixel(x + dx + col_value, y + dy + row_value);
+							pixel_func(x + dx + col_value, y + dy + row_value);
                         }
                     }
                 }
@@ -354,7 +354,7 @@ SSD1306_Text_Bounds_t _calc_text_bounds(
 	return bounds;
 }
 
-void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds) {    
+void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds, u8 fill) {    
     u8 x_count = bounds->max_x - x + 1;
 	u8 max_y = bounds->max_y;
     
@@ -377,7 +377,12 @@ void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds) {
         
         // Apply to all X coordinates in range
         u8 *dest = &SSD1306_BUF[page * SSD1306_W + x];
-        for (u8 i = 0; i < x_count; i++) dest[i] &= ~output_bitmask;
+
+		if (fill) {
+            for (u8 i = 0; i < x_count; i++) dest[i] |= output_bitmask;
+        } else {
+            for (u8 i = 0; i < x_count; i++) dest[i] &= ~output_bitmask;
+        }
     }
 }
 
@@ -387,19 +392,29 @@ void ssd1306_draw_scaled_text(
 	SSD1306_Text_Bounds_t bounds = _calc_text_bounds(strlen(str), x, y, config);
 	// printf("mx: %d, my: %d, page: %d\n", bounds.max_x, bounds.max_y, bounds.max_page);
 
-	u32 start_time = micros();
-	_clear_text_bounds(x, y, &bounds);
-	u32 clear_elapsed = micros() - start_time;
-
-	start_time = micros();
-	ssd1306_render_scaled_text(x, y, str, config);
-	u32 render_elapsed = micros() - start_time;
+	//# clear text bounds
+	// Pre-fill the entire text area background
+	u32 moment = micros();
+	_clear_text_bounds(x, y, &bounds, !(config->color));
+	u32 clear_elapsed = micros() - moment;
 	
-	start_time = micros();
+	//# render text
+	moment = micros();
+
+    if (config->color == 0) {
+		_render_scaled_text(x, y, str, config, render_pixel_erase);
+    } else {
+		_render_scaled_text(x, y, str, config, render_pixel);
+	}
+	
+	u32 render_elapsed = micros() - moment;
+	
+	// //# draw text
+	moment = micros();
 	u8 min_page = y>>3;
 	u8 max_page = bounds.max_y>>3;
 	ssd1306_draw_area(min_page, max_page, x, bounds.max_x);
-	u32 draw_elapsed = micros() - start_time;
+	u32 draw_elapsed = micros() - moment;
 
 	printf("\nclear (%d), render (%d), draw (%d) in us\n", 
 			clear_elapsed, render_elapsed, draw_elapsed);
