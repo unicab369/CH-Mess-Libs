@@ -108,7 +108,10 @@ int main() {
 
 		if ((moment - time_ref) > 1000) {
 			sprintf(str_output, "Hello %ld", counter++);
-			// ssd1306_draw_scaled_text(0, 0, "AAAAAAAAAAAAAAAAAAAAAA", &str_conf);
+
+			u32 time_ref2 = micros();
+			// ssd1306_draw_str(str_output, 0, 0);
+			// printf("elapsed: %d us\n", micros() - time_ref2);
 			ssd1306_draw_scaled_text(0, 0, str_output, &str_conf);
 
 			// test_lines();

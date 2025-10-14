@@ -166,7 +166,7 @@ typedef struct {
 
 Page_Mask_t page_masks[SSD1306_H];
 
-u8 frame_buffer[SSD1306_PAGES * SSD1306_W] = { 0 };
+u8 SSD1306_BUF[SSD1306_PAGES * SSD1306_W] = { 0 };
 
 //# Init function
 u8 ssd1306_init() {
@@ -241,7 +241,7 @@ void ssd1306_draw_area(
 
     for (u8 page = start_page; page <= end_page; page++) {
         // Calculate the base address for this page in the 1D array
-        u8* page_base = &frame_buffer[page * SSD1306_W + col_start];
+        u8* page_base = &SSD1306_BUF[page * SSD1306_W + col_start];
         u16 page_data_length = col_end - col_start;
         
         // Send page data in chunks
@@ -259,20 +259,20 @@ void ssd1306_draw_all() {
 }
 
 void ssd1306_fill(u8 value) {
-	memset(frame_buffer, value, sizeof(frame_buffer));
+	memset(SSD1306_BUF, value, sizeof(SSD1306_BUF));
 }
 
 //# render pixel
 void render_pixel(u8 x, u8 y) {
 	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
 	Page_Mask_t mask = page_masks[y];
-	frame_buffer[mask.page * SSD1306_W + x] |= mask.bitmask;
+	SSD1306_BUF[mask.page * SSD1306_W + x] |= mask.bitmask;
 }
 
 void render_pixel_erase(u8 x, u8 y) {
 	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
 	Page_Mask_t mask = page_masks[y];
-	frame_buffer[mask.page * SSD1306_W + x] &= ~mask.bitmask;
+	SSD1306_BUF[mask.page * SSD1306_W + x] &= ~mask.bitmask;
 }
 
 
@@ -376,7 +376,7 @@ void _clear_text_bounds(u8 x, u8 y, SSD1306_Text_Bounds_t *bounds) {
         }
         
         // Apply to all X coordinates in range
-        u8 *dest = &frame_buffer[page * SSD1306_W + x];
+        u8 *dest = &SSD1306_BUF[page * SSD1306_W + x];
         for (u8 i = 0; i < x_count; i++) dest[i] &= ~output_bitmask;
     }
 }
@@ -418,7 +418,7 @@ void render_fastHorLine(u8 y, u8 x0, u8 x1) {
 	CLAMP_VALUES(x0, x1, SSD1306_W_LIMIT);
 
 	Page_Mask_t mask = page_masks[y];
-	u8* row_start = &frame_buffer[mask.page * SSD1306_W];
+	u8* row_start = &SSD1306_BUF[mask.page * SSD1306_W];
 
 	for (u8 x = x0; x <= x1; x++) {
 		row_start[x] |= mask.bitmask;
@@ -433,7 +433,7 @@ void render_fastHorLine_erase(u8 y, u8 x0, u8 x1) {
 	CLAMP_VALUES(x0, x1, SSD1306_W_LIMIT);
 
     Page_Mask_t mask = page_masks[y];
-    u8* row = &frame_buffer[mask.page * SSD1306_W];
+    u8* row = &SSD1306_BUF[mask.page * SSD1306_W];
     
     for (u8 x = x0; x <= x1; x++) {
         row[x] &= ~mask.bitmask;  // CLEAR pixels instead of setting them
@@ -466,7 +466,7 @@ void render_horLine(u8 y, u8 x_limits[2], u8 thickness, u8 mirror) {
 
 	for (u8 y_pos = y; y_pos <= y_end ; y_pos++) {
 		Page_Mask_t mask = page_masks[y_pos];
-		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x_limits[0]];
+		u8* row_start = &SSD1306_BUF[mask.page * SSD1306_W + x_limits[0]];
 
         for (u8 i = 0; i < width; i++) {
             row_start[i] |= mask.bitmask;
@@ -500,7 +500,7 @@ void render_verLine(u8 x, u8 y_limits[2], u8 thickness, u8 mirror) {
 
 	for (u8 y_pos = y_limits[0]; y_pos <= y_limits[1]; y_pos++) {
 		Page_Mask_t mask = page_masks[y_pos];
-		u8* row_start = &frame_buffer[mask.page * SSD1306_W + x];
+		u8* row_start = &SSD1306_BUF[mask.page * SSD1306_W + x];
 
 		for (u8 i = 0; i < x_len; i++) {
 			row_start[i] |= mask.bitmask;  					// Sequential access
@@ -531,7 +531,7 @@ void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
 			// Fast path for single-pixel
 			if (x0 < SSD1306_W && y0 < SSD1306_H) {
 				Page_Mask_t mask = page_masks[y0];
-				frame_buffer[mask.page * SSD1306_W + x0] |= mask.bitmask;
+				SSD1306_BUF[mask.page * SSD1306_W + x0] |= mask.bitmask;
 			}
 		} else {
 			// Calculate bounds (branchless min/max)
@@ -547,7 +547,7 @@ void render_line(u8 point_a[2], u8 point_b[2], u8 thickness) {
 			// Optimized row filling
 			for (u8 y = y_start; y <= y_end; y++) {
 				Page_Mask_t mask = page_masks[y];
-				u8* row = &frame_buffer[mask.page * SSD1306_W + x_start];
+				u8* row = &SSD1306_BUF[mask.page * SSD1306_W + x_start];
 				u8 pattern = mask.bitmask;
 
 				// Optimized filling based on width
@@ -944,51 +944,59 @@ void test_polys() {
 u8 myvalues[16] = { 30, 50, 60, 40, 20, 50, 30, 10, 35, 10, 20, 30, 40, 50, 60, 20 };
 int y = 0;
 
+// #define SSD1306_TEST_LINES
+#define SSD1306_TEST_POLYGONS
+#define SSD1306_TEST_CIRCLES
+
 void ssd1306_draw_test() {
-	//# Test hor lines
-	for(int8_t i = 0; i<sizeof(myvalues); i++) {
-		u8 limit[] = { 0, myvalues[i] };
-		render_horLine(y, limit, 2, 0);
-		render_horLine(y, limit, 2, 1);
-		y += 4;
-	}
-
-	y = 0;
-	//# Test ver lines
-	for(int8_t i = 0; i<sizeof(myvalues); i++) {
-		u8 limit[] = { 0, myvalues[i] };
-		render_verLine(y, limit, 1, 0);
-		render_verLine(y, limit, 1, 1);
-		y += 4;
-	}
-
-	// //# Test lines
-	// for(u8 x=0; x<SSD1306_W; x+=16) {
-	// 	u8 point_a0[] = { x, 0 };
-	// 	u8 point_a1[] = { SSD1306_W, y };
-	// 	render_line(point_a0, point_a1, 2);
-
-	// 	u8 point_b0[] = { SSD1306_W-x, SSD1306_H };
-	// 	u8 point_b1[] = { 0, SSD1306_H-y };
-	// 	render_line(point_b0, point_b1, 2);
-
-	// 	y+= SSD1306_H/8;
-	// }
-
-	y = 0;
-	//# Test circles
-	for (int8_t i = 0; i<4; i++) {
-		u8 should_fill = i > 1 ? 1 : 0;
-		render_circle((u8[]){ 110, y }, 5, should_fill);
-
-		if (i > 1) {
-			render_ring((u8[]){ 90, y + 12 }, 7, 3);
+	#ifdef SSD1306_TEST_LINES
+		//# Test hor lines
+		for(int8_t i = 0; i<sizeof(myvalues); i++) {
+			u8 limit[] = { 0, myvalues[i] };
+			render_horLine(y, limit, 2, 0);
+			render_horLine(y, limit, 2, 1);
+			y += 4;
 		}
-		
-		y += 14;
-	}
 
-	render_pie((u8[]){ 60, 55 }, 12, 0, 180);
+		y = 0;
+		//# Test ver lines
+		for(int8_t i = 0; i<sizeof(myvalues); i++) {
+			u8 limit[] = { 0, myvalues[i] };
+			render_verLine(y, limit, 1, 0);
+			render_verLine(y, limit, 1, 1);
+			y += 4;
+		}
+
+		// //# Test lines
+		// for(u8 x=0; x<SSD1306_W; x+=16) {
+		// 	u8 point_a0[] = { x, 0 };
+		// 	u8 point_a1[] = { SSD1306_W, y };
+		// 	render_line(point_a0, point_a1, 2);
+
+		// 	u8 point_b0[] = { SSD1306_W-x, SSD1306_H };
+		// 	u8 point_b1[] = { 0, SSD1306_H-y };
+		// 	render_line(point_b0, point_b1, 2);
+
+		// 	y+= SSD1306_H/8;
+		// }
+	#endif
+
+	#ifdef SSD1306_TEST_CIRCLES
+		y = 0;
+		//# Test circles
+		for (int8_t i = 0; i<4; i++) {
+			u8 should_fill = i > 1 ? 1 : 0;
+			render_circle((u8[]){ 110, y }, 5, should_fill);
+
+			if (i > 1) {
+				render_ring((u8[]){ 90, y + 12 }, 7, 3);
+			}
+			
+			y += 14;
+		}
+
+		render_pie((u8[]){ 60, 55 }, 12, 0, 180);
+	#endif
 
 	// ssd1306_draw_str("sz 8x8 testing", 0, 0);
 	// ssd1306_draw_str("testing 22222234fdafadfafa", 1, 0);
@@ -999,7 +1007,9 @@ void ssd1306_draw_test() {
 	// ssd1306_draw_str("testing 77774fdafadfafa", 6, 0);
 	// ssd1306_draw_str("testing 88884fdafadfafa", 7, 0);
 
-	// test_polys();
+	#ifdef SSD1306_TEST_POLYGONS
+		test_polys();
+	#endif
 
 	ssd1306_draw_all();
 }
