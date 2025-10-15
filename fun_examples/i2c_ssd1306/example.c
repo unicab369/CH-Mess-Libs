@@ -71,6 +71,7 @@ int main() {
 			// printf("elapsed: %d us\n", micros() - time_ref2);
 			// ssd1306_draw_scaled_text(0, 0, str_output, &DEAULF_STR_CONFIG);
 
+			i2c_periodic_tick();
 			// test_lines();
 			time_ref = millis();
 		}

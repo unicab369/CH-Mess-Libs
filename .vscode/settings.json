@@ -14,7 +14,8 @@
         "fun_encoder_gpio.h": "c",
         "word_font.h": "c",
         "fun_encoder_tim2.h": "c",
-        "fun_button.h": "c"
+        "fun_button.h": "c",
+        "fun_i2c_sensors.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
