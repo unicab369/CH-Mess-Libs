@@ -187,13 +187,13 @@ void i2c_periodic_tick() {
 
 			u16 shunt_mV, bus_mV, current_mA, power_mW;
 			test_ina219(&shunt_mV, &bus_mV, &current_mA, &power_mW);
-			sprintf(str_output, "SHUNT %d mV", shunt_mV);
+			sprintf(str_output, "SHUNT %d uV", shunt_mV);
 			ssd1306_render_scaled_txt(0, 26, str_output, &MENU_STR_CONFIG);
 
 			sprintf(str_output, "BUS %d mV", bus_mV);
 			ssd1306_render_scaled_txt(0, 39, str_output, &MENU_STR_CONFIG);
 
-			sprintf(str_output, "I %d mA", current_mA);
+			sprintf(str_output, "%d mA, %d mW", current_mA, power_mW);
 			ssd1306_render_scaled_txt(0, 52, str_output, &MENU_STR_CONFIG);
 
 			ssd1306_draw_all();
