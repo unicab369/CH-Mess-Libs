@@ -27,8 +27,10 @@
 #include "ch32fun.h"
 #include "word_font.h"
 
-// enable 0.5 scale for text string
-#define SSD1306_USE_05TEXT_SCALE
+// enable 0.25 scale for text string
+#define SSD1306_TEXT_SCALE_NUMERATOR 5
+#define SSD1306_TEXT_SCALE_DENOMINATOR 6
+#define SSD1306_TEXT_SCALE
 
 #define SSD1306_128X64
 
@@ -340,11 +342,11 @@ SSD1306_Text_Bounds_t _calc_text_bounds(
 
 	u16 scaled_width, scaled_height;
 
-	#ifdef SSD1306_USE_05TEXT_SCALE
-		// Scaling formula: width = base_width * (1 + (scale-1)*0.5)
-		// In integer math: width = (base_width * (scale + 1)) / 2
-		scaled_width = config->WIDTH * (config->scale_mode + 1) / 2;		// add 2 for rounding UP
-		scaled_height = config->HEIGHT * (config->scale_mode + 1) / 2; 	// add 2 for rounding UP
+	#ifdef SSD1306_TEXT_SCALE
+		scaled_width = config->WIDTH * 
+			(config->scale_mode + SSD1306_TEXT_SCALE_NUMERATOR) / SSD1306_TEXT_SCALE_DENOMINATOR;
+		scaled_height = config->HEIGHT *
+			(config->scale_mode + SSD1306_TEXT_SCALE_NUMERATOR) / SSD1306_TEXT_SCALE_DENOMINATOR;
 	#else
 		// Calculate total width: (chars * width * scale) + (spaces between chars)
 		scaled_width = config->WIDTH * config->scale_mode;
@@ -372,8 +374,9 @@ void ssd1306_render_scaled_txt(
 	// Early exit if starting position is off-screen
     if (x >= SSD1306_W || y >= SSD1306_H) return;
 
-	#ifdef SSD1306_USE_05TEXT_SCALE
-		u8 char_width_scaled = (config->WIDTH * (config->scale_mode + 1)) / 2;
+	#ifdef SSD1306_TEXT_SCALE
+		u8 char_width_scaled = config->WIDTH *
+			(config->scale_mode + SSD1306_TEXT_SCALE_NUMERATOR) / SSD1306_TEXT_SCALE_DENOMINATOR;
 	#else
 		u8 char_width_scaled = config->WIDTH * config->scale_mode;
     #endif
@@ -403,13 +406,13 @@ void ssd1306_render_scaled_txt(
                 if (glyph & (1 << row)) {
 					//# draw the glyth bit - expand by scale
 
-					#ifdef SSD1306_USE_05TEXT_SCALE
+					#ifdef SSD1306_TEXT_SCALE
 						// Calculate start and end positions using the full scaling formula
-						u8 factor = config->scale_mode + 1;
-						u8 start_col = (col * factor) / 2;
-						u8 end_col = ((col + 1) * factor) / 2;
-						u8 start_row = (row * factor) / 2;
-						u8 end_row = ((row + 1) * factor) / 2;
+						u8 factor = config->scale_mode + SSD1306_TEXT_SCALE_NUMERATOR;
+						u8 start_col = (col * factor) / SSD1306_TEXT_SCALE_DENOMINATOR;
+						u8 end_col = ((col + 1) * factor) / SSD1306_TEXT_SCALE_DENOMINATOR;
+						u8 start_row = (row * factor) / SSD1306_TEXT_SCALE_DENOMINATOR;
+						u8 end_row = ((row + 1) * factor) / SSD1306_TEXT_SCALE_DENOMINATOR;
 						
 						// Fill the rectangular block
 						for (u8 tc = start_col; tc < end_col; tc++) {

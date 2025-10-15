@@ -1,3 +1,6 @@
+#ifndef FUN_UTILITIES_H
+#define FUN_UTILITIES_H
+
 #include "ch32fun.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -130,3 +133,5 @@ void UTIL_DebugBuffer_addValue(Debug_Buffer_t *model, u16 value) {
     model->buf[model->buf_idx] = value;
     model->buf_idx++;
 }
+
+#endif

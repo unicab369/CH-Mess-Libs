@@ -22,6 +22,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+
+#ifndef FUN_LOG_H
+#define FUN_LOG_H
+
 //------------------------------------------------------------------------------
 // Module includes
 //------------------------------------------------------------------------------
@@ -173,4 +177,7 @@ void LOG(uint8_t style, uint8_t color, const char *tag, char *format, ...) {
     printf("\033[0;39m");  // Reset color
     printf("\n");  // Just newline, not \r\n
 }
+#endif
+
+
 #endif

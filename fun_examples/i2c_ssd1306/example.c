@@ -2,10 +2,12 @@
 #include "../../fun_modules/fun_encoder_tim2.h"
 #include "../../fun_modules/fun_encoder_gpio.h"
 #include "../../fun_modules/fun_button.h"
+#include "../../fun_modules/fun_irSender.h"
 
 #include "i2c_manager.h"
 
 #define BUTTON_PIN PC0
+#define IR_SENDER_PIN PD0
 
 //# Encoder Callback
 void onHandle_Encoder(int8_t position, int8_t direction) {
@@ -52,11 +54,23 @@ int main() {
 		.pinB = PD3,
 	};
 	fun_encoder_gpio_init(&encoder_b);
+	i2c_menu_init();
 
+
+	//# IR Sender
+	IR_Sender_t irSender = {
+		// .IR_MODE = 0			// NEC protocol
+		.IR_MODE = 1			// NfS1 protocol
+	};
+
+	u8 mode = fun_irSender_init(IR_SENDER_PIN);
+	static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111, 0x2222, 0x3333, 0x4444 };
+	irSender.BUFFER = data_out;
+	irSender.BUFFER_LEN = 7;
+
+	//# start loop
 	u32 time_ref = millis();
 	u32 counter = 0;
-
-	i2c_menu_init();
 
 	while(1) {
 		u32 moment = millis();
@@ -71,9 +85,30 @@ int main() {
 			// printf("elapsed: %d us\n", micros() - time_ref2);
 			// ssd1306_draw_scaled_text(0, 0, str_output, &DEAULF_STR_CONFIG);
 
-			i2c_periodic_tick();
 			// test_lines();
+			u8 check = i2c_menu_period_tick();
+			
+			if (check) {
+				switch (menu_selectedIdx) {
+					case 2: {
+						printf("Sending Ir message\n");
+						fun_irSender_asyncSend(&irSender);
+						break;
+					}
+				}
+			}
+
 			time_ref = millis();
+		}
+
+
+		if (!is_main_menu) {
+			switch (menu_selectedIdx) {
+				case 2:
+					fun_irSender_asyncTask(&irSender);
+					break;
+				default: break;
+			}
 		}
 
 		// fun_encoder_tim2_task(moment, &encoder_a, onHandle_Encoder);

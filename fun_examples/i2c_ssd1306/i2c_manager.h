@@ -2,6 +2,8 @@
 #include "../../fun_modules/fun_i2c/fun_ssd1306.h"
 #include "../../fun_modules/fun_i2c/fun_i2c_sensors.h"
 
+#define I2C_MENU_LINE_SPACING 12
+
 i2c_device_t dev_ssd1306 = {
 	.clkr = I2C_CLK_100KHZ,
 	.type = I2C_ADDR_7BIT,
@@ -29,16 +31,15 @@ u8 SSD1306_DATA(u8 *data, int sz) {
 u8 i2c_ping_display() { return i2c_ping(0x3C) == I2C_OK; }
 
 //! ####################################
-//! I2C MENU
+//! MENU FUNCTIONS
 //! ####################################
-
 
 Str_Config_t MENU_STR_CONFIG = {
 	.FONT = FONT_7x5,
 	.WIDTH = 5,
 	.HEIGHT = 7,
 	.SPACE = 1,
-	.scale_mode = 2,
+	.scale_mode = 3,
 	.color = 1,
 };
 
@@ -63,7 +64,8 @@ void i2c_scan_callback(const u8 addr) {
 	printf("%s\n", str_output);
 
 	if (is_main_menu) return;
-	ssd1306_draw_scaled_text(0, I2C_DEVICES_COUNT++ * 13, str_output, &MENU_STR_CONFIG);
+	ssd1306_draw_scaled_text(0, I2C_DEVICES_COUNT++ * I2C_MENU_LINE_SPACING, 
+								str_output, &MENU_STR_CONFIG);
 }
 
 void i2c_start_scan() {
@@ -73,10 +75,14 @@ void i2c_start_scan() {
 	printf("* Done Scanning *\n\n");
 }
 
+void i2c_menu_updateCursor() {
+	ssd1306_draw_scaled_text(0, menu_selectedIdx * I2C_MENU_LINE_SPACING, ">", &MENU_STR_CONFIG);
+}
+
 void i2c_menu_move(int8_t direction) {
 	if (is_main_menu == 0) return;
 	if (direction == 0) return;
-	ssd1306_draw_scaled_text(0, menu_selectedIdx * 13, " ", &MENU_STR_CONFIG);
+	ssd1306_draw_scaled_text(0, menu_selectedIdx * I2C_MENU_LINE_SPACING, " ", &MENU_STR_CONFIG);
 
 	if (direction > 0) {
 		menu_selectedIdx++;
@@ -88,41 +94,29 @@ void i2c_menu_move(int8_t direction) {
 	if (menu_selectedIdx < 0) menu_selectedIdx = 4;
 	if (menu_selectedIdx > 4) menu_selectedIdx = 0;
 
-	ssd1306_draw_scaled_text(0, menu_selectedIdx * 13, ">", &MENU_STR_CONFIG);
+	i2c_menu_updateCursor();
 }
 
 void i2c_menu_select(u8 newIdx) {
 	if (newIdx > 4) return;
-	ssd1306_draw_scaled_text(0, menu_selectedIdx * 13, " ", &MENU_STR_CONFIG);
+	ssd1306_draw_scaled_text(0, menu_selectedIdx * I2C_MENU_LINE_SPACING, " ", &MENU_STR_CONFIG);
 
 	menu_selectedIdx = newIdx;
-	ssd1306_draw_scaled_text(0, newIdx * 13, ">", &MENU_STR_CONFIG);
+	i2c_menu_updateCursor();
 }
 
 void i2c_menu_handle() {
 	if (is_main_menu) {
 		switch (menu_selectedIdx) {
-			case 0:
-				//# I2C SCAN
+			case 0: case 1: case 2: case 3:
 				is_main_menu = 0;
-				I2C_DEVICES_COUNT = 0;
-				ssd1306_draw_fill(0x00);	// clear screen
-				i2c_start_scan();
-				break;
-			case 1:
-				is_main_menu = 0;
-				// test_bh1750();
-				// test_sht3x();
-				// test_ina219();
-
 				break;
 			default: break;
 		}
 	} else {
 		switch (menu_selectedIdx) {
-			case 0: case 1:
+			case 0: case 1: case 2: case 3:
 				is_main_menu = 1;
-				ssd1306_draw_fill(0x00);
 				i2c_menu_main();
 				break;
 			default: break;
@@ -130,15 +124,25 @@ void i2c_menu_handle() {
 	}
 }
 
-void i2c_menu_main() {
-	ssd1306_render_scaled_txt(0, 0, "  I2C SCAN", &MENU_STR_CONFIG);
-	ssd1306_render_scaled_txt(0, 13, "  I2C SENSORS", &MENU_STR_CONFIG);
-	ssd1306_render_scaled_txt(0, 26, "  IR RECEIVER", &MENU_STR_CONFIG);
-	ssd1306_render_scaled_txt(0, 39, "  OPTION 4", &MENU_STR_CONFIG);
-	ssd1306_render_scaled_txt(0, 52, "  12345678901234", &MENU_STR_CONFIG);
-	ssd1306_render_scaled_txt(0, 0, ">", &MENU_STR_CONFIG);
-	ssd1306_draw_all();
+void i2c_menu_render_text_at(u8 line, const char *str) {
+	ssd1306_render_scaled_txt(0, line * I2C_MENU_LINE_SPACING, str, &MENU_STR_CONFIG);
 }
+
+void i2c_menu_main() {
+	ssd1306_draw_fill(0x00);
+	i2c_menu_render_text_at(0, "  I2C SENSORS");
+	i2c_menu_render_text_at(1, "  I2C SCAN");
+	i2c_menu_render_text_at(2, "  IR SENDER");
+	i2c_menu_render_text_at(3, "  IR RECEIVER");
+	i2c_menu_render_text_at(4, "  PERFORMANCE");
+	ssd1306_draw_all();
+
+	i2c_menu_updateCursor();
+}
+
+//! ####################################
+//! MENU INIT
+//! ####################################
 
 void i2c_menu_init() {
 	if(i2c_init(&dev_ssd1306) != I2C_OK) {
@@ -166,41 +170,57 @@ void i2c_menu_init() {
 	}
 }
 
+u8 irCount = 0;
 
-void i2c_periodic_tick() {
-	if (is_main_menu) return;
-	
+u8 i2c_menu_period_tick() {
+	if (is_main_menu) return 0;
+
+	// clear screen
+	ssd1306_render_fill(0x00);
+
 	switch (menu_selectedIdx) {
-		case 0: break;
-		case 1: {
-			ssd1306_render_fill(0x00);
-
+		case 0: {
 			u16 lux;
 			test_bh1750(&lux);
 			sprintf(str_output, "LUX %d", lux);
-			ssd1306_render_scaled_txt(0, 0, str_output, &MENU_STR_CONFIG);
+			i2c_menu_render_text_at(0, str_output);
 
 			u16 tempF, hum;
 			test_sht3x(&tempF, &hum);
 			sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
-			ssd1306_render_scaled_txt(0, 13, str_output, &MENU_STR_CONFIG);
+			i2c_menu_render_text_at(1, str_output);
 
-			u16 shunt_mV, bus_mV, current_mA, power_mW;
-			test_ina219(&shunt_mV, &bus_mV, &current_mA, &power_mW);
+			u16 shunt_mV, bus_mV, current_uA, power_uW;
+			test_ina219(&shunt_mV, &bus_mV, &current_uA, &power_uW);
 			sprintf(str_output, "SHUNT %d uV", shunt_mV);
-			ssd1306_render_scaled_txt(0, 26, str_output, &MENU_STR_CONFIG);
+			i2c_menu_render_text_at(2, str_output);
 
 			sprintf(str_output, "BUS %d mV", bus_mV);
-			ssd1306_render_scaled_txt(0, 39, str_output, &MENU_STR_CONFIG);
+			i2c_menu_render_text_at(3, str_output);
 
-			sprintf(str_output, "%d mA, %d mW", current_mA, power_mW);
-			ssd1306_render_scaled_txt(0, 52, str_output, &MENU_STR_CONFIG);
+			sprintf(str_output, "%d uA, %d uW", current_uA, power_uW);
+			i2c_menu_render_text_at(4, str_output);
 
 			ssd1306_draw_all();
-
-			break;
+			return 1;			
 		}
-
-		default: break;
+		case 1: {
+			I2C_DEVICES_COUNT = 0;
+			ssd1306_draw_all();
+			i2c_start_scan();
+			return 1;
+		}
+		case 2: {
+			sprintf(str_output, "IR Sending %d", irCount++);
+			i2c_menu_render_text_at(0, str_output);
+			ssd1306_draw_all();
+			return 1;
+		}
+		case 3: {
+			sprintf(str_output, "IR Receiving %d", irCount++);
+			i2c_menu_render_text_at(0, str_output);
+			ssd1306_draw_all();
+			return 1;
+		}
 	}
 }

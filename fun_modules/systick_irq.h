@@ -6,6 +6,10 @@
  *                    convenient macro function)
  */
 
+
+#ifndef SYSTICK_H
+#define SYSTICK_H
+
 #include "ch32fun.h"
 #include <stdio.h>
 
@@ -77,3 +81,5 @@ uint32_t SysTick_getRunTime(void *handler(void)) {
 	handler();
 	return micros() - now;
 }
+
+#endif
