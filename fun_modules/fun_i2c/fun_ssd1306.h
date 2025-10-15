@@ -261,6 +261,11 @@ void ssd1306_render_fill(u8 value) {
 	memset(SSD1306_BUF, value, sizeof(SSD1306_BUF));
 }
 
+void ssd1306_draw_fill(u8 value) {
+	ssd1306_render_fill(value);
+	ssd1306_draw_all();
+}
+
 //# render pixel
 void render_pixel(u8 x, u8 y) {
 	if (x >= SSD1306_W || y >= SSD1306_H) return; // Skip if out of bounds
@@ -283,7 +288,7 @@ typedef struct {
 	u8 *FONT;
 	u8 WIDTH, HEIGHT;
 	u8 SPACE;
-	u8 scale;
+	u8 scale_mode;
 	u8 color;
 } Str_Config_t;
 
@@ -338,12 +343,12 @@ SSD1306_Text_Bounds_t _calc_text_bounds(
 	#ifdef SSD1306_USE_05TEXT_SCALE
 		// Scaling formula: width = base_width * (1 + (scale-1)*0.5)
 		// In integer math: width = (base_width * (scale + 1)) / 2
-		scaled_width = config->WIDTH * (config->scale + 1) / 2;		// add 2 for rounding UP
-		scaled_height = config->HEIGHT * (config->scale + 1) / 2; 	// add 2 for rounding UP
+		scaled_width = config->WIDTH * (config->scale_mode + 1) / 2;		// add 2 for rounding UP
+		scaled_height = config->HEIGHT * (config->scale_mode + 1) / 2; 	// add 2 for rounding UP
 	#else
 		// Calculate total width: (chars * width * scale) + (spaces between chars)
-		scaled_width = config->WIDTH * config->scale;
-		scaled_height = config->HEIGHT * config->scale;
+		scaled_width = config->WIDTH * config->scale_mode;
+		scaled_height = config->HEIGHT * config->scale_mode;
 	#endif
 
     u8 width = (char_count * scaled_width) + ((char_count - 1) * config->SPACE);
@@ -362,22 +367,30 @@ SSD1306_Text_Bounds_t _calc_text_bounds(
 
 //# Render string with size
 void ssd1306_render_scaled_txt(
-	u8 x, u8 y, const char *str,
-	Str_Config_t *config, void (*pixel_func)(u8 x, u8 y)
+	u8 x, u8 y, const char *str, Str_Config_t *config
 ) {
 	// Early exit if starting position is off-screen
     if (x >= SSD1306_W || y >= SSD1306_H) return;
 
 	#ifdef SSD1306_USE_05TEXT_SCALE
-		u8 char_width_scaled = (config->WIDTH * (config->scale + 1)) / 2;
+		u8 char_width_scaled = (config->WIDTH * (config->scale_mode + 1)) / 2;
 	#else
-		u8 char_width_scaled = config->WIDTH * config->scale;
+		u8 char_width_scaled = config->WIDTH * config->scale_mode;
     #endif
 
 	u8 space_offset = char_width_scaled + config->SPACE;
+	void (*pixel_func)(u8 x, u8 y) = config->color ? render_pixel : render_pixel_erase;
 
     while (*str) {
         u8 c = *str++;
+
+		//# Efficient spacebar handling - skip rendering entirely
+        if (c == ' ') {
+            x += space_offset;
+            if (x >= SSD1306_W) break;
+            continue;
+        }
+
         if (c < 32 || c > 127) c = '?';
         u8 char_index = c - 32;
         u16 char_pos = char_index * config->WIDTH;
@@ -392,10 +405,11 @@ void ssd1306_render_scaled_txt(
 
 					#ifdef SSD1306_USE_05TEXT_SCALE
 						// Calculate start and end positions using the full scaling formula
-						u8 start_col = (col * (config->scale + 1)) / 2;
-						u8 end_col = ((col + 1) * (config->scale + 1)) / 2;
-						u8 start_row = (row * (config->scale + 1)) / 2;
-						u8 end_row = ((row + 1) * (config->scale + 1)) / 2;
+						u8 factor = config->scale_mode + 1;
+						u8 start_col = (col * factor) / 2;
+						u8 end_col = ((col + 1) * factor) / 2;
+						u8 start_row = (row * factor) / 2;
+						u8 end_row = ((row + 1) * factor) / 2;
 						
 						// Fill the rectangular block
 						for (u8 tc = start_col; tc < end_col; tc++) {
@@ -404,11 +418,11 @@ void ssd1306_render_scaled_txt(
 							}
 						}
 					#else
-						u8 col_value = col * config->scale;
-						u8 row_value = row * config->scale;
+						u8 col_value = col * config->scale_mode;
+						u8 row_value = row * config->scale_mode;
 
-						for (u8 dx = 0; dx < config->scale; dx++) {
-							for (u8 dy = 0; dy < config->scale; dy++) {
+						for (u8 dx = 0; dx < config->scale_mode; dx++) {
+							for (u8 dy = 0; dy < config->scale_mode; dy++) {
 								pixel_func(x + dx + col_value, y + dy + row_value);
 							}
 						}
@@ -422,6 +436,8 @@ void ssd1306_render_scaled_txt(
 		if (x >= SSD1306_W) break;
     }
 }
+
+// #define SSD1306_DRAW_TEXT_LOG
 
 //# Draw string with size
 void ssd1306_draw_scaled_text(
@@ -439,13 +455,7 @@ void ssd1306_draw_scaled_text(
 	
 	//# render text
 	moment = micros();
-
-    if (config->color == 0) {
-		ssd1306_render_scaled_txt(x, y, str, config, render_pixel_erase);
-    } else {
-		ssd1306_render_scaled_txt(x, y, str, config, render_pixel);
-	}
-	
+	ssd1306_render_scaled_txt(x, y, str, config);
 	u32 render_elapsed = micros() - moment;
 	
 	// //# draw text
@@ -455,8 +465,10 @@ void ssd1306_draw_scaled_text(
 	ssd1306_draw_area(min_page, max_page, x, bounds.max_x);
 	u32 draw_elapsed = micros() - moment;
 
-	printf("\nclear (%d), render (%d), draw (%d) in us\n", 
-			clear_elapsed, render_elapsed, draw_elapsed);
+	#ifdef SSD1306_DRAW_TEXT_LOG
+		printf("\nclear (%d), render (%d), draw (%d) in us\n", 
+				clear_elapsed, render_elapsed, draw_elapsed);
+	#endif
 }
 
 

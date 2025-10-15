@@ -11,7 +11,10 @@
         "lib_i2c.h": "c",
         "fun_ssd1306.h": "c",
         "fun_irreceivernec.h": "c",
-        "fun_encoder_gpio.h": "c"
+        "fun_encoder_gpio.h": "c",
+        "word_font.h": "c",
+        "fun_encoder_tim2.h": "c",
+        "fun_button.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

@@ -1,6 +1,8 @@
 #include "ch32fun.h"
 #include <stdio.h>
 
+// #define ENCODER_LOG_ENABLE
+
 #define ENCODER_TIMEOUT_MS 50       // too big will cause slow outputs
 #define ENCODER_DEBOUNCE_TIME_MS 2  // too big will cause bad readings
 
@@ -75,6 +77,10 @@ void fun_encoder_gpio_task(u32 time, Encoder_GPIO_t *model, void (*handler)(int8
             int8_t direction = (model->pos > model->last_pos) ? 1 : -1;
             handler(model->pos, direction);
             model->last_pos = model->pos;
+
+            #ifdef ENCODER_LOG_ENABLE
+                printf("pos: %d, direction: %d\n", model->pos, direction);
+            #endif
         }
     }
 
