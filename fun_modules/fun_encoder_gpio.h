@@ -54,6 +54,7 @@ void fun_encoder_gpio_init(Encoder_GPIO_t *model) {
 //     model->last_pinB_state = pinB_state;
 // }
 
+// borrow from yspacelabs
 
 void fun_encoder_gpio_task(u32 time, Encoder_GPIO_t *model, void (*handler)(int8_t, int8_t)) {
     u8 curr_state = funDigitalRead(model->pinA)<<1 | funDigitalRead(model->pinB);

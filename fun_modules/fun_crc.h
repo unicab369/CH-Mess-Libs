@@ -1,3 +1,6 @@
+#ifndef FUN_CRC_H
+#define FUN_CRC_H
+
 #include "ch32fun.h"
 #include <stdio.h>
 
@@ -72,3 +75,5 @@ u64 combine_64(u16 part0, u16 part1, u16 part2, u16 part3) {
     return ((u64)part0 << 48) | ((u64)part1 << 32) | 
             ((u64)part2 << 16) | ((u64)part3 << 0);
 }
+
+#endif
