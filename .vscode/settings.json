@@ -16,7 +16,8 @@
         "fun_encoder_tim2.h": "c",
         "fun_button.h": "c",
         "fun_i2c_sensors.h": "c",
-        "fun_utilities.h": "c"
+        "fun_utilities.h": "c",
+        "i2c_manager.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
