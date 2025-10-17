@@ -21,7 +21,7 @@ void UTIL_cycleInfo_clear(Cycle_Info_t *info) {
 }
 
 void UTIL_cycleInfo_flush(Cycle_Info_t *info) {
-    printf("\nCycle count: %d, max/min: %d/%d us, lim_counter: %d\n",
+    printf("\nCycle count: %ld, max/min: %ld/%d us, lim_counter: %ld\n",
             info->count, info->time_max, info->time_min, info->limit_counter);
     UTIL_cycleInfo_clear(info);
 }
@@ -51,7 +51,7 @@ void UTIL_minMax_clear(MinMax_Info32_t *info) {
 }
 
 void UTIL_minMax_flush(MinMax_Info32_t *info) {
-    printf("MinMax Max: %d, Min: %d\n", info->max, info->min);
+    printf("MinMax Max: %ld, Min: %ld\n", info->max, info->min);
     UTIL_minMax_clear(info);
 }
 
@@ -83,10 +83,10 @@ void fun_thresholdBuffer_clear(Threshold_Buffer_t *info) {
 }
 
 void fun_thresholdBuffer_flush(Threshold_Buffer_t *info) {
-    printf("\nThreshold: %d, count: %d\n", info->threshold_limit, info->buf_idx);
+    printf("\nThreshold: %ld, count: %d\n", info->threshold_limit, info->buf_idx);
 
     for (int i = 0; i < info->buf_idx; i++) {
-        printf("%d ", info->buf[i]);
+        printf("%ld ", info->buf[i]);
     }
     printf("\n");
 

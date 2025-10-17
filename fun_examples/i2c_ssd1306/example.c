@@ -8,9 +8,12 @@
 
 // #include "i2c_manager.h"
 
-#define BUTTON_PIN PC0
-#define IR_SENDER_PIN PD0
+#define BUTTON_PIN		PC0
+#define IR_SENDER_PIN	PD0
 #define IR_RECEIVER_PIN PA1
+
+#define SPI_DC_PIN		PD2
+#define SPI_RST_PIN		PC3
 
 //# Encoder Callback
 void onHandle_Encoder(int8_t position, int8_t direction) {
@@ -114,6 +117,11 @@ int main() {
 	static Button_t button1 = { .pin = BUTTON_PIN };
 	fun_button_setup(&button1);
 
+	WS2812BDMAInit();
+
+	SPI_init(SPI_RST_PIN, SPI_DC_PIN);
+	// SPI_DMA_init(DMA1_Channel3);
+
 	//# WS28126: uses PD5
 	// fun_gpio_ws2812_init(PD5);
 
@@ -158,6 +166,8 @@ int main() {
 		u32 moment = millis();
 		
 		fun_button_task(moment, &button1, onHandle_Button);
+
+		Neo_task(moment);
 
 		// if ((moment - time_ref) > 1000) {
 		// 	sprintf(str_output, "Hello %ld", counter++);

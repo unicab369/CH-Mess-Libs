@@ -7,7 +7,7 @@ int main() {
 	Delay_Ms(100);
 	funGpioInitAll();
 	
-	u32 time_ref = millis();
+	u32 moment = millis();
 
 	while(1) {
 

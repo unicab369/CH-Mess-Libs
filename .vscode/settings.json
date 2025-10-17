@@ -17,7 +17,12 @@
         "fun_button.h": "c",
         "fun_i2c_sensors.h": "c",
         "fun_utilities.h": "c",
-        "i2c_manager.h": "c"
+        "i2c_manager.h": "c",
+        "ws2812b_dma_spi_led_driver.h": "c",
+        "fun_ws2812_spi.h": "c",
+        "util_colors.h": "c",
+        "lib_spi.h": "c",
+        "lut_sin.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

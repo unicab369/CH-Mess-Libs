@@ -106,6 +106,7 @@ int main() {
 				}
 				break;
 		}
+		
 		step = step + direction;
 		build_buffer();
 		update_pixels();
