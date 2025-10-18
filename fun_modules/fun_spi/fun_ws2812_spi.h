@@ -213,7 +213,6 @@ typedef struct {
 	int8_t frame_step;		  // Step for moving LEDs
 	u8 modifier;				// modifier for each frame
 
-	u8 is_enabled;
 	u8 prev_index;			  // Previous index used
 	u8 curr_index;			   // Last index used
 	u32 ref_time;			   // Last time the move was updated
@@ -235,11 +234,10 @@ typedef enum {
 
 RGB_t WS2812_BUF[DMALEDS] = {0};
 
-WS2812_frame_t leds_frame = {	 
-	.frame_duration_ms = 70, 
+WS2812_frame_t leds_frame = {
+	.frame_duration_ms = 0,		// disabled 
 	.frame_step = 1,			// Move one LED at a time
 	.modifier = 0,
-	.is_enabled = 0,
 
 	.curr_index = 0,
 	.prev_index = 0,
@@ -256,157 +254,132 @@ animation_color_t color_ani = {
 	.index = 0,
 };
 
-int8_t systick_handleTimeout(WS2812_frame_t* fr) {
-	u32 now = millis();
-	if (now - fr->ref_time > fr->frame_duration_ms) {
-		fr->ref_time = now;
-		return 1;
-	}
-	return 0;
-}
 
 //# NEO_COLOR_FLASHING
-u32 Neo_render_colorFlashing(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
-	if (systick_handleTimeout(frame)) {
-		// Combine frame update and reset check
-		if (++frame->modifier >= 100) {
-			frame->modifier = 0;
-			ani->index = (ani->index + 1) % ani->colors_len;
-		}
-
-		RGB_t color = ani->COLOR_BUF[ani->index];
-		RGB_t new_color = COLOR_SET_BRIGHTNESS(color, frame->modifier);
-
-		for (int i=0; i < DMALEDS; i++) {
-			WS2812_BUF[i] = new_color;
-		}
+void Neo_render_colorFlashing(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	// Combine frame update and reset check
+	if (++frame->modifier >= 100) {
+		frame->modifier = 0;
+		ani->index = (ani->index + 1) % ani->colors_len;
 	}
 
-	return WS2812_BUF[ledIdx].packed;
+	RGB_t color = ani->COLOR_BUF[ani->index];
+	RGB_t new_color = COLOR_SET_BRIGHTNESS(color, frame->modifier);
+
+	for (int i=0; i < DMALEDS; i++) {
+		WS2812_BUF[i] = new_color;
+	}
 }
 
 //# NEO_COLOR_CHASE
-u32 Neo_render_colorChase(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
-	if (systick_handleTimeout(frame)) {
-		for (int i=0; i < DMALEDS; i++) {
-			WS2812_BUF[i] = ani->COLOR_BUF[((i + frame->curr_index) / 3) % ani->colors_len];
-		}
-
-		frame->curr_index += frame->frame_step;
+void Neo_render_colorChase(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	for (int i=0; i < DMALEDS; i++) {
+		WS2812_BUF[i] = ani->COLOR_BUF[((i + frame->curr_index) / 3) % ani->colors_len];
 	}
 
-	return WS2812_BUF[ledIdx].packed;
+	frame->curr_index += frame->frame_step;
 }
 
 //# NEO_SOLO_COLOR_CHASE
-u32 Neo_render_soloColorChase(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
-	if (systick_handleTimeout(frame)) {
-		WS2812_BUF[frame->prev_index] = COLOR_BLACK;	   // Turn off previous LED
-		WS2812_BUF[frame->curr_index] = ani->COLOR_BUF[ani->index];;
+void Neo_render_soloColorChase(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	WS2812_BUF[frame->prev_index] = COLOR_BLACK;	   // Turn off previous LED
+	WS2812_BUF[frame->curr_index] = ani->COLOR_BUF[ani->index];;
 
-		// update indexes
-		frame->prev_index = frame->curr_index;
-		frame->curr_index += frame->frame_step;
-		
-		if (frame->curr_index >= DMALEDS) {
-			frame->curr_index %= DMALEDS;
-			ani->index = (ani->index + 1) % ani->colors_len;
-		}
+	// update indexes
+	frame->prev_index = frame->curr_index;
+	frame->curr_index += frame->frame_step;
+	
+	if (frame->curr_index >= DMALEDS) {
+		frame->curr_index %= DMALEDS;
+		ani->index = (ani->index + 1) % ani->colors_len;
 	}
-
-	return WS2812_BUF[ledIdx].packed;
 }
 
 //# NEO_COLOR_FADE
-u32 Neo_render_colorFade(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
-	if (systick_handleTimeout(frame)) {
-		// Fade all LEDs slightly
-		for (int i = 0; i < DMALEDS; i++) {
-			u8 diff = frame->curr_index - i;
-			WS2812_BUF[i] = COLOR_DECREMENT(ani->COLOR_BUF[ani->index], diff*49);	   // Triangular diff growth
-		}
-
-		// update indexes
-		frame->curr_index += frame->frame_step;
-
-		if (frame->curr_index >= DMALEDS) {
-			frame->curr_index %= DMALEDS;
-			ani->index = (ani->index + 1) % ani->colors_len;
-		}
+void Neo_render_colorFade(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	// Fade all LEDs slightly
+	for (int i = 0; i < DMALEDS; i++) {
+		u8 diff = frame->curr_index - i;
+		WS2812_BUF[i] = COLOR_DECREMENT(ani->COLOR_BUF[ani->index], diff*49);	   // Triangular diff growth
 	}
-	
-	return WS2812_BUF[ledIdx].packed;
+
+	// update indexes
+	frame->curr_index += frame->frame_step;
+
+	if (frame->curr_index >= DMALEDS) {
+		frame->curr_index %= DMALEDS;
+		ani->index = (ani->index + 1) % ani->colors_len;
+	}
 }
 
 //# NEO_SOLO_COLOR_FADE
-u32 Neo_render_soloColorFade(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
-	if (systick_handleTimeout(frame)) {
-		frame->modifier += 3;
-		RGB_t color = ani->COLOR_BUF[ani->index];;
-		WS2812_BUF[frame->curr_index] = COLOR_SET_BRIGHTNESS(color, frame->modifier);
+void Neo_render_soloColorFade(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	frame->modifier += 3;
+	RGB_t color = ani->COLOR_BUF[ani->index];;
+	WS2812_BUF[frame->curr_index] = COLOR_SET_BRIGHTNESS(color, frame->modifier);
 
-		if (frame->modifier >= 100) {
-			frame->modifier = 0;
+	if (frame->modifier >= 100) {
+		frame->modifier = 0;
 
-			u8 next_idx = frame->curr_index + frame->frame_step;
-			frame->curr_index = next_idx % DMALEDS;
+		u8 next_idx = frame->curr_index + frame->frame_step;
+		frame->curr_index = next_idx % DMALEDS;
 
-			if (next_idx >= DMALEDS) {
-				ani->index = (ani->index + 1) % ani->colors_len;
-			}
+		if (next_idx >= DMALEDS) {
+			ani->index = (ani->index + 1) % ani->colors_len;
 		}
 	}
-
-	return WS2812_BUF[ledIdx].packed;
 }
 
-
-u8 Neo_LedCmd = 0x61;
+void (*onNeo_handler)(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) = Neo_render_colorFlashing;
 
 void Neo_loadCommand(u8 cmd) {
 	cmd = cmd % 5;
 	printf("Neo_loadCommand: %02X\n", cmd);
-
-	Neo_LedCmd = cmd;
-	leds_frame.is_enabled = 1;
 	leds_frame.curr_index = 0;
 	leds_frame.ref_time = millis();
-
 	color_ani.index = 0;
 	memset(WS2812_BUF, 0, sizeof(WS2812_BUF));
-}
 
-u32 WS2812BLEDCallback(int ledIdx){
 	leds_frame.frame_duration_ms = 70;
 
-	switch (Neo_LedCmd) {
+	switch (cmd) {
 		case NEO_COLOR_CHASE:
 			leds_frame.frame_duration_ms = 150;
-			return Neo_render_colorChase(&leds_frame, &color_ani, ledIdx);
+			onNeo_handler = Neo_render_colorChase;
 			break;
 		case NEO_SOLO_COLOR_CHASE:
-			return Neo_render_soloColorChase(&leds_frame, &color_ani, ledIdx);
+			onNeo_handler = Neo_render_soloColorChase;
 			break;
 		case NEO_COLOR_FADE:
-			return Neo_render_colorFade(&leds_frame, &color_ani, ledIdx);
+			onNeo_handler = Neo_render_colorFade;
 			break;
 		case NEO_SOLO_COLOR_FADE:
 			leds_frame.frame_duration_ms = 10;
-			return Neo_render_soloColorFade(&leds_frame, &color_ani, ledIdx);
+			onNeo_handler = Neo_render_soloColorFade;
 			break;
 		default:
 			leds_frame.frame_duration_ms = 10;
-			return Neo_render_colorFlashing(&leds_frame, &color_ani, ledIdx);
+			onNeo_handler = Neo_render_colorFlashing;
+			break;
 	}
+}
+
+u32 WS2812BLEDCallback(int ledIdx){
+	u32 moment = millis();
+	if (moment - leds_frame.ref_time > leds_frame.frame_duration_ms) {
+		leds_frame.ref_time = moment;
+		onNeo_handler(&leds_frame, &color_ani, ledIdx);
+	}
+	
+	return WS2812_BUF[ledIdx].packed;
 }
 
 u32 neo_timeRef = 0;
 
 void Neo_task(u32 time) {
+	if (WS2812BLED_InUse || leds_frame.frame_duration_ms < 1) return;
 	if (time - neo_timeRef < 12) return;
 	neo_timeRef = time;
-	
-	if (WS2812BLED_InUse || leds_frame.is_enabled == 0) return;
 
 	SPI_DMA_WS2812_tick(DMALEDS);
 }
