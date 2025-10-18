@@ -1,4 +1,27 @@
-// Core functions stolen from ch32fun
+// CORE FUNCTIONS stolen from ch32fun
+// Copyright (c) 2025 UniTheCat
+// This is a large modification of the original code
+
+// MIT License
+// Copyright (c) 2016 Sandeep Mistry
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 #include "../../fun_modules/fun_base.h"
 #include "../util_colors.h"
@@ -209,19 +232,19 @@ void SPI_DMA_WS2812_tick() {
 //! ####################################
 
 typedef struct {
-	u32 frame_duration_ms;	  // Duration for each frame in ms
-	int8_t frame_step;		  // Step for moving LEDs
-	u8 modifier;				// modifier for each frame
+	u32 frame_duration_ms;	  	// Duration for each frame in ms
+	int8_t frame_step;		  	// Step for moving LEDs
+	u16 modifier;				// modifier for each frame
 
-	u8 prev_index;			  // Previous index used
-	u8 curr_index;			   // Last index used
-	u32 ref_time;			   // Last time the move was updated
+	u8 prev_index;			  	// Previous index used
+	u8 curr_index;			   	// Last index used
+	u32 ref_time;			   	// Last time the move was updated
 } WS2812_frame_t;
 
 typedef struct {
-	RGB_t* COLOR_BUF;		   // Array of colors to cycle through
-	u8 colors_len;			  // Number of colors in the array
-	u8 index;				   // Current color index
+	RGB_t* COLOR_BUF;		   	// Array of colors to cycle through
+	u8 colors_len;			  	// Number of colors in the array
+	u8 index;				   	// Current color index
 } animation_color_t;
 
 typedef enum {
@@ -230,6 +253,8 @@ typedef enum {
 	NEO_SOLO_COLOR_CHASE = 0x02,
 	NEO_COLOR_FADE = 0x03,
 	NEO_SOLO_COLOR_FADE = 0x04,
+	NEO_FIRE = 0x05,
+	NEO_ICE = 0x06,
 } Neo_Event_e;
 
 RGB_t WS2812_BUF[DMALEDS] = {0};
@@ -330,17 +355,70 @@ void Neo_render_soloColorFade(WS2812_frame_t* frame, animation_color_t* ani, int
 	}
 }
 
+//# NEO_FIRE - Stolen from ch32fun ws2812 example
+uint16_t WS2812_PHASE_BUF[DMALEDS];
+
+u8 sawtooth_hue(u8 index) {
+	index &= 0xFF;
+	
+	// Continuous sawtooth: 0-255 repeating
+	return (index * 255) / 255;  // Simple linear ramp
+}
+
+u8 generate_hue_value(u8 index) {
+	index &= 0xFF;
+	
+	if (index < 42) return (index * 6);		   // 0-252 in steps of 6
+	if (index < 170) return 0xFF;				 // Plateau
+	if (index < 212) return ((211 - index) * 6);  // 252-0 in steps of 6
+	return 0x00;								  // Bottom
+}
+
+void Neo_render_fire(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	for (int i = 0; i < DMALEDS; i++ ) {
+		// u8 rand = LUT_make_rand(i);
+		u8 rand = rand_make_byte() * 2;
+		WS2812_PHASE_BUF[i] += ((rand << 2) + (rand << 1)) >> 1;
+
+		u8 sin_value = sine_8bits(WS2812_PHASE_BUF[i] >> 8);
+		u8 intensity = sin_value >> 3;		// scale down sin_value/8
+
+		u8 rChannel = generate_hue_value(intensity + 30);
+		u8 gChannel = generate_hue_value((intensity + 0)) >> 1;
+		u8 bChannel = generate_hue_value(intensity + 190) >> 1;
+
+		u32 fire =	rChannel | (u16)(gChannel << 8) | (u16)(bChannel << 16);
+		WS2812_BUF[i] = MAKE_COLOR_FROM32(fire);
+	}
+}
+
+//# NEO_ICE - Stolen from ch32fun ws2812 example
+void Neo_render_ice(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	for (int i = 0; i < DMALEDS; i++ ) {
+		u8 rand = LUT_make_rand(i);
+		// u8 rand = rand_make_byte() * 2;
+		WS2812_PHASE_BUF[i] += ((rand << 2) + (rand << 1)) >> 1;
+
+		u8 sin_value = sine_8bits(WS2812_PHASE_BUF[i] >> 8);
+		u32 ice = (sin_value>>1) | ((sin_value>>1)<<8) | 0x7f0000;
+		WS2812_BUF[i] = MAKE_COLOR_FROM32(ice);
+	}
+}
+
 void (*onNeo_handler)(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) = Neo_render_colorFlashing;
 
 void Neo_loadCommand(u8 cmd) {
-	cmd = cmd % 5;
+	cmd = cmd % 7;
 	printf("Neo_loadCommand: %02X\n", cmd);
+
 	leds_frame.curr_index = 0;
 	leds_frame.ref_time = millis();
 	color_ani.index = 0;
 	memset(WS2812_BUF, 0, sizeof(WS2812_BUF));
 
-	leds_frame.frame_duration_ms = 70;
+	leds_frame.frame_duration_ms = 10;
+
+	for(int k = 0; k < DMALEDS; k++ ) WS2812_PHASE_BUF[k] = k<<8;
 
 	switch (cmd) {
 		case NEO_COLOR_CHASE:
@@ -348,17 +426,23 @@ void Neo_loadCommand(u8 cmd) {
 			onNeo_handler = Neo_render_colorChase;
 			break;
 		case NEO_SOLO_COLOR_CHASE:
+			leds_frame.frame_duration_ms = 70;
 			onNeo_handler = Neo_render_soloColorChase;
 			break;
 		case NEO_COLOR_FADE:
+			leds_frame.frame_duration_ms = 70;
 			onNeo_handler = Neo_render_colorFade;
 			break;
 		case NEO_SOLO_COLOR_FADE:
-			leds_frame.frame_duration_ms = 10;
 			onNeo_handler = Neo_render_soloColorFade;
 			break;
+		case NEO_FIRE:
+			onNeo_handler = Neo_render_fire;
+			break;
+		case NEO_ICE:
+			onNeo_handler = Neo_render_ice;
+			break;
 		default:
-			leds_frame.frame_duration_ms = 10;
 			onNeo_handler = Neo_render_colorFlashing;
 			break;
 	}

@@ -19,6 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "ch32fun.h"
 #include <stdint.h>
 
 #define SINE_OFFSET      512      // Center offset
