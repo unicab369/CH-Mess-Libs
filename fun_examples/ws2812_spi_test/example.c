@@ -52,7 +52,7 @@ int main() {
 
 	SPI_init(SPI_RST_PIN, SPI_DC_PIN);
 	SPI_DMA_WS2812_init(DMALEDS, DMA1_Channel3);
-	Neo_loadCommand(0x00);
+	Neo_loadCommand(NEO_COLOR_FADE);
 
 	for(int k = 0; k < DMALEDS; k++ ) phases[k] = k<<8;
 
@@ -78,10 +78,10 @@ int main() {
 		// SPI_DMA_WS2812_tick();
 
 
-		// if (millis() - moment > 7000) {
-		// 	Neo_loadCommand(counter++);
-		// 	moment = millis();
-		// }
+		if (millis() - moment > 7000) {
+			Neo_loadCommand(counter++);
+			moment = millis();
+		}
 
 		Neo_task(millis());
 	}
