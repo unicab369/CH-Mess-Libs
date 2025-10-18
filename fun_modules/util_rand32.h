@@ -22,7 +22,7 @@
 #include <stdint.h>
 
 // Xorshift32 state variable
-static u32 rand_state = 0x12345678;
+static u32 rand_state = 0x33845789;
 static u32 rand_current;
 
 // Initialize the generator with a seed
