@@ -155,8 +155,10 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 			int bit = delta_1 < delta_0;
 
 			u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F);  // &0x0F is %16
+
 			// MSB first (reversed)
-			if (bit) model->WORD_BUFFER[model->word_idx] |= 1 << bit_pos;
+			u16 *current_word = &model->WORD_BUFFER[model->word_idx];
+			if (bit) *current_word |= 1 << bit_pos;
 
 			if (bit_pos == 0) {
 				model->word_idx++;			// next word

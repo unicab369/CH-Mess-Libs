@@ -43,7 +43,7 @@ Str_Config_t MENU_STR_CONFIG = {
 	.color = 1,
 };
 
-char str_output[SSD1306_MAX_STR_LEN];
+// char str_output[SSD1306_MAX_STR_LEN] = { 0 };
 int8_t menu_selectedIdx = 0;
 u8 is_main_menu = 1;
 
@@ -60,12 +60,13 @@ void modI2C_display(const char *str, u8 line) {
 //# Scan callback
 void i2c_scan_callback(const u8 addr) {
 	if (addr == 0x00 || addr == 0x7F) return; // Skip reserved addresses
-	sprintf(str_output, "I2C: 0x%02X", addr);
-	printf("%s\n", str_output);
+    char local_buf[32] = {0};
+    sprintf(local_buf, "I2C: 0x%02X", addr);
+	printf("%s\n", local_buf);
 
 	if (is_main_menu) return;
 	ssd1306_draw_scaled_text(0, I2C_DEVICES_COUNT++ * I2C_MENU_LINE_SPACING, 
-								str_output, &MENU_STR_CONFIG);
+								local_buf, &MENU_STR_CONFIG);
 }
 
 void i2c_start_scan() {
@@ -105,30 +106,12 @@ void i2c_menu_select(u8 newIdx) {
 	i2c_menu_updateCursor();
 }
 
-void i2c_menu_handle() {
-	if (is_main_menu) {
-		switch (menu_selectedIdx) {
-			case 0: case 1: case 2: case 3:
-				is_main_menu = 0;
-				break;
-			default: break;
-		}
-	} else {
-		switch (menu_selectedIdx) {
-			case 0: case 1: case 2: case 3:
-				is_main_menu = 1;
-				i2c_menu_main();
-				break;
-			default: break;
-		}
-	}
-}
-
 void i2c_menu_render_text_at(u8 line, const char *str) {
 	ssd1306_render_scaled_txt(0, line * I2C_MENU_LINE_SPACING, str, &MENU_STR_CONFIG);
 }
 
 void i2c_menu_main() {
+	printf("show main menu\n");
 	ssd1306_draw_fill(0x00);
 	i2c_menu_render_text_at(0, "  I2C SENSORS");
 	i2c_menu_render_text_at(1, "  I2C SCAN");
@@ -155,25 +138,46 @@ void i2c_menu_init() {
 
 			u32 time_ref = millis();
 
-			sprintf(str_output, "Hello Bee");
-			ssd1306_draw_str(str_output, 0, 0);
+			// sprintf(str_output, "Hello Bee");
+			// ssd1306_draw_str(str_output, 0, 0);
 			i2c_menu_main();
 
 			time_ref = millis();
 			// ssd1306_draw_test();
 			ssd1306_draw_all();
 		
-			printf("elapsed: %d ms\n", millis() - time_ref);
+			printf("elapsed: %ld ms\n", millis() - time_ref);
 		}
 
+		Delay_Ms(100);
 		i2c_start_scan();
 	}
 }
 
 u8 irCount = 0;
 
+void i2c_menu_handle() {
+	if (is_main_menu) {
+		switch (menu_selectedIdx) {
+			case 0: case 1: case 2: case 3:
+				is_main_menu = 0;
+				break;
+			default: break;
+		}
+	} else {
+		switch (menu_selectedIdx) {
+			case 0: case 1: case 2: case 3:
+				is_main_menu = 1;
+				i2c_menu_main();
+				break;
+			default: break;
+		}
+	}
+}
+
 u8 i2c_menu_period_tick() {
 	if (is_main_menu) return 0;
+	static char str_output[SSD1306_MAX_STR_LEN] = { 0 };
 
 	// clear screen
 	ssd1306_render_fill(0x00);

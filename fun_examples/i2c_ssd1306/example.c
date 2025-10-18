@@ -2,11 +2,10 @@
 // #include "../../fun_modules/fun_encoder_tim2.h"
 #include "../../fun_modules/fun_encoder_gpio.h"
 #include "../../fun_modules/fun_button.h"
-// #include "../../fun_modules/fun_irSender.h"
-// #include "../../fun_modules/fun_irReceiver.h"
-// #include "../../fun_modules/fun_ws2812_gpio.h"
+#include "../../fun_modules/fun_irSender.h"
+#include "../../fun_modules/fun_irReceiver.h"
 
-// #include "i2c_manager.h"
+#include "i2c_manager.h"
 
 #define BUTTON_PIN		PC0
 #define IR_SENDER_PIN	PD0
@@ -25,7 +24,7 @@ void onHandle_Button(Button_Event_e event, u32 time) {
 	switch (event) {
 		case BTN_SINGLECLICK:
 			printf("Single Click\n");
-			// i2c_menu_handle();
+			i2c_menu_handle();
 			break;
 		case BTN_DOUBLECLICK:
 			printf("Double Click\n");
@@ -33,8 +32,6 @@ void onHandle_Button(Button_Event_e event, u32 time) {
 		case BTN_LONGPRESS:
 			printf("Long Press\n"); break;
 	}
-
-	// mngI2c_load_buttonState(millis(), event);
 }
 
 
@@ -44,17 +41,17 @@ u16 WORD_BUFFER[MAX_WORDS_LEN] = {0};
 
 //# IR Receiver Callback
 void onHandle_irReceiver(u16 *words, u16 len) {
-	printf("\n\nReceived Buffer Len %d\n", len);
-	s16 limit = len > MAX_WORDS_LEN ? MAX_WORDS_LEN : len;
-	s16 line_offset = (limit / 8) - IR_RECEIVER_LINE_LOG;
-	u8 start = line_offset > 0 ? line_offset * 8 : 0;
+	// printf("\n\nReceived Buffer Len %d\n", len);
+	// s16 limit = len > MAX_WORDS_LEN ? MAX_WORDS_LEN : len;
+	// s16 line_offset = (limit / 8) - IR_RECEIVER_LINE_LOG;
+	// u8 start = line_offset > 0 ? line_offset * 8 : 0;
 
-	if (start > 0) printf("... Skipping %d lines ...\n", line_offset);
+	// if (start > 0) printf("... Skipping %d lines ...\n", line_offset);
 
-	for (int i = start; i < limit; i++) {
-		printf("0x%04X  ", words[i]);
-		if (i%8 == 7) printf("\n");			// separator
-	}
+	// for (int i = start; i < limit; i++) {
+	// 	printf("0x%04X  ", words[i]);
+	// 	if (i%8 == 7) printf("\n");			// separator
+	// }
 }
 
 //! ####################################
@@ -117,14 +114,6 @@ int main() {
 	static Button_t button1 = { .pin = BUTTON_PIN };
 	fun_button_setup(&button1);
 
-	WS2812BDMAInit();
-
-	SPI_init(SPI_RST_PIN, SPI_DC_PIN);
-	// SPI_DMA_init(DMA1_Channel3);
-
-	//# WS28126: uses PD5
-	// fun_gpio_ws2812_init(PD5);
-
 	//# TIM2: uses PD4(CH1) and PD3(CH2)
 	// Encoder_t encoder_a;
 	// fun_encoder_tim2_init(&encoder_a);
@@ -134,29 +123,29 @@ int main() {
 		.pinB = PD3,
 	};
 	fun_encoder_gpio_init(&encoder_b);
-	// i2c_menu_init();
+	i2c_menu_init();
 
-	// //# IR Sender
-	// IR_Sender_t irSender = {
-	// 	// .IR_MODE = 0			// NEC protocol
-	// 	.IR_MODE = 1			// NfS1 protocol
-	// };
+	//# IR Sender
+	IR_Sender_t irSender = {
+		// .IR_MODE = 0			// NEC protocol
+		.IR_MODE = 1			// NfS1 protocol
+	};
 
-	// u8 mode = fun_irSender_init(IR_SENDER_PIN);
-	// static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111, 0x2222, 0x3333, 0x4444 };
-	// irSender.BUFFER = data_out;
-	// irSender.BUFFER_LEN = 7;
+	u8 mode = fun_irSender_init(IR_SENDER_PIN);
+	static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111, 0x2222, 0x3333, 0x4444 };
+	irSender.BUFFER = data_out;
+	irSender.BUFFER_LEN = 7;
 
-	// //# IR Receiver
-	// IR_Receiver_t receiver = {
-	// 	.pin = IR_RECEIVER_PIN,
-	// 	.WORD_BUFFER_LEN = MAX_WORDS_LEN,
-	// 	.WORD_BUFFER = WORD_BUFFER,
-	// 	// .IR_MODE = 0				// NEC protocol
-	// 	.IR_MODE = 1				// NfS protocol
-	// };
+	//# IR Receiver
+	IR_Receiver_t receiver = {
+		.pin = IR_RECEIVER_PIN,
+		.WORD_BUFFER_LEN = MAX_WORDS_LEN,
+		.WORD_BUFFER = WORD_BUFFER,
+		// .IR_MODE = 0				// NEC protocol
+		.IR_MODE = 1				// NfS protocol
+	};
 
-	// fun_irReceiver_init(&receiver);
+	fun_irReceiver_init(&receiver);
 
 	//# start loop
 	u32 time_ref = millis();
@@ -164,50 +153,51 @@ int main() {
 
 	while(1) {
 		u32 moment = millis();
-		
 		fun_button_task(moment, &button1, onHandle_Button);
+		// fun_encoder_tim2_task(moment, &encoder_a, onHandle_Encoder);
+		fun_encoder_gpio_task(moment, &encoder_b, onHandle_Encoder);
 
-		Neo_task(moment);
+		// periodic tasks
+		if ((moment - time_ref) > 1000) {
+			// sprintf(str_output, "Hello %ld", counter++);
 
-		// if ((moment - time_ref) > 1000) {
-		// 	sprintf(str_output, "Hello %ld", counter++);
+			u32 time_ref2 = micros();
+			// ssd1306_draw_str(str_output, 0, 0);
+			// printf("elapsed: %d us\n", micros() - time_ref2);
+			// ssd1306_draw_scaled_text(0, 0, str_output, &DEAULF_STR_CONFIG);
 
-		// 	u32 time_ref2 = micros();
-		// 	// ssd1306_draw_str(str_output, 0, 0);
-		// 	// printf("elapsed: %d us\n", micros() - time_ref2);
-		// 	// ssd1306_draw_scaled_text(0, 0, str_output, &DEAULF_STR_CONFIG);
-
-		// 	// test_lines();
-		// 	u8 check = i2c_menu_period_tick();
+			// test_lines();
+			u8 check = i2c_menu_period_tick();
 			
-		// 	if (check) {
-		// 		switch (menu_selectedIdx) {
-		// 			case 2: {
-		// 				printf("Sending Ir message\n");
-		// 				// fun_irSender_asyncSend(&irSender);
-		// 				// _irSend_CustomTestData();
-		// 				break;
-		// 			}
-		// 		}
-		// 	}
+			if (check) {
+				switch (menu_selectedIdx) {
+					case 2: {
+						printf("Sending Ir message\n");
+						fun_irSender_asyncSend(&irSender);
+						// _irSend_CustomTestData();
+						break;
+					}
+				}
+			}
 
-		// 	time_ref = millis();
-		// }
+			time_ref = millis();
+		}
 
-		// if (!is_main_menu) {
-		// 	switch (menu_selectedIdx) {
-		// 		case 2:
-		// 			// fun_irSender_asyncTask(&irSender);
-		// 			break;
-		// 		case 3:
-		// 			// fun_irReceiver_task(&receiver, onHandle_irReceiver);
-		// 			break;
-		// 		default: break;
-		// 	}
-		// }
-
-		// // fun_encoder_tim2_task(moment, &encoder_a, onHandle_Encoder);
-		// fun_encoder_gpio_task(moment, &encoder_b, onHandle_Encoder);
+		// async tasks
+		if (!is_main_menu) {
+			switch (menu_selectedIdx) {
+				case 2:
+					printf("case 2\n");
+					fun_irSender_asyncTask(&irSender);
+					break;
+				case 3:
+					printf("case 3\n");
+					fun_irReceiver_task(&receiver, onHandle_irReceiver);
+					break;
+				default:
+					break;
+			}
+		}
 	}
 }
 
