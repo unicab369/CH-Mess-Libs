@@ -51,3 +51,7 @@ static inline u8 rand_make_byte(void) {
     
     return *byte_ptr++;
 }
+
+static inline u32 rand_make_u32() {
+    return rand_xorshift32(&rand_state);
+}

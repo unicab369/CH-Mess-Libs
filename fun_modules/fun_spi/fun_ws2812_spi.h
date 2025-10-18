@@ -253,8 +253,11 @@ typedef enum {
 	NEO_SOLO_COLOR_CHASE = 0x02,
 	NEO_COLOR_FADE = 0x03,
 	NEO_SOLO_COLOR_FADE = 0x04,
-	NEO_FIRE = 0x05,
-	NEO_ICE = 0x06,
+	NEO_SOLO_RANDOM_FADE = 0x05,
+	NEO_RAINBOW_WAVE = 0x06,
+	NEO_RAINBOW_FAST = 0x07,
+	NEO_FIRE = 0x08,
+	NEO_ICE = 0x09,
 } Neo_Event_e;
 
 RGB_t WS2812_BUF[DMALEDS] = {0};
@@ -355,6 +358,72 @@ void Neo_render_soloColorFade(WS2812_frame_t* frame, animation_color_t* ani, int
 	}
 }
 
+//# NEO_SOLO_RANDOM_FADE
+void Neo_render_soloRandomFade(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+	frame->modifier += 3;
+	RGB_t color = ani->COLOR_BUF[ani->index];
+	WS2812_BUF[frame->curr_index] = COLOR_SET_BRIGHTNESS(color, frame->modifier);
+
+	if (frame->modifier >= 100) {
+		frame->modifier = 0;
+
+        // Branchless different random index
+        u8 next_idx = (frame->curr_index + 1 + (rand_make_u32() % (DMALEDS - 1))) % DMALEDS;
+        frame->curr_index = next_idx;
+	}
+}
+
+//# NEO_RAINBOW_WAVE
+void Neo_render_rainbow_wave(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+    for (int i = 0; i < DMALEDS; i++) {
+        // Moving rainbow with smooth sine transitions
+        u8 base_hue = (frame->curr_index * 4 + i * 8) & 0xFF;
+        
+        u8 r = sine_8bits(base_hue);
+        u8 g = sine_8bits((base_hue + 85) & 0xFF);   // 120° offset
+        u8 b = sine_8bits((base_hue + 170) & 0xFF);  // 240° offset
+        
+        WS2812_BUF[i] = MAKE_COLOR_RGB(r, g, b);
+    }
+    
+    frame->curr_index += frame->frame_step;
+}
+
+//# NEO_RAINBOW_FAST
+void Neo_render_rainbow_fast(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
+    // Adjustable parameters
+    static const u8 SPEED = 3;           // Movement speed (1-20)
+    static const u8 WIDTH = 200;         // Rainbow width (1-255)
+    static const u8 divider = 2;
+	
+    for (int i = 0; i < DMALEDS; i++) {
+        // Calculate hue with adjustable speed and width
+        u8 hue = ((i * WIDTH / DMALEDS) + frame->curr_index * SPEED) & 0xFF;
+        u8 r, g, b;
+        
+        // Rainbow color wheel
+        if (hue < 85) {
+            r = 255 - hue * 3;
+            g = hue * 3;
+            b = 0;
+        } else if (hue < 170) {
+            hue -= 85;
+            r = 0;
+            g = 255 - hue * 3;
+            b = hue * 3;
+        } else {
+            hue -= 170;
+            r = hue * 3;
+            g = 0;
+            b = 255 - hue * 3;
+        }
+		
+        WS2812_BUF[i] = MAKE_COLOR_RGB(r/divider, g/divider, b/divider);
+    }
+    
+    frame->curr_index += frame->frame_step;
+}
+
 //# NEO_FIRE - Stolen from ch32fun ws2812 example
 uint16_t WS2812_PHASE_BUF[DMALEDS];
 
@@ -405,10 +474,11 @@ void Neo_render_ice(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) {
 	}
 }
 
+
 void (*onNeo_handler)(WS2812_frame_t* frame, animation_color_t* ani, int ledIdx) = Neo_render_colorFlashing;
 
 void Neo_loadCommand(u8 cmd) {
-	cmd = cmd % 7;
+	cmd = cmd % 10;
 	printf("Neo_loadCommand: %02X\n", cmd);
 
 	leds_frame.curr_index = 0;
@@ -423,28 +493,30 @@ void Neo_loadCommand(u8 cmd) {
 	switch (cmd) {
 		case NEO_COLOR_CHASE:
 			leds_frame.frame_duration_ms = 150;
-			onNeo_handler = Neo_render_colorChase;
-			break;
+			onNeo_handler = Neo_render_colorChase; break;
 		case NEO_SOLO_COLOR_CHASE:
 			leds_frame.frame_duration_ms = 70;
-			onNeo_handler = Neo_render_soloColorChase;
-			break;
+			onNeo_handler = Neo_render_soloColorChase; break;
 		case NEO_COLOR_FADE:
 			leds_frame.frame_duration_ms = 70;
-			onNeo_handler = Neo_render_colorFade;
-			break;
+			onNeo_handler = Neo_render_colorFade; break;
 		case NEO_SOLO_COLOR_FADE:
-			onNeo_handler = Neo_render_soloColorFade;
-			break;
+			onNeo_handler = Neo_render_soloColorFade; break;
+		case NEO_SOLO_RANDOM_FADE:
+			leds_frame.frame_duration_ms = 15;
+			onNeo_handler = Neo_render_soloRandomFade; break;
+		case NEO_RAINBOW_WAVE:
+			leds_frame.frame_duration_ms = 30;
+			onNeo_handler = Neo_render_rainbow_wave; break;
+		case NEO_RAINBOW_FAST:
+			leds_frame.frame_duration_ms = 30;
+			onNeo_handler = Neo_render_rainbow_fast; break;
 		case NEO_FIRE:
-			onNeo_handler = Neo_render_fire;
-			break;
+			onNeo_handler = Neo_render_fire; break;
 		case NEO_ICE:
-			onNeo_handler = Neo_render_ice;
-			break;
+			onNeo_handler = Neo_render_ice; break;
 		default:
-			onNeo_handler = Neo_render_colorFlashing;
-			break;
+			onNeo_handler = Neo_render_colorFlashing; break;
 	}
 }
 

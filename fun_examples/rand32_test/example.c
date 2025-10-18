@@ -18,6 +18,7 @@ int main() {
 		moment = micros();
 		for (int i = 0; i < 1000; i++) {
 			result_sink = rand_make_byte();
+			printf("%d ", result_sink);
 		}
 		u32 elapse1 = micros() - moment;
 
