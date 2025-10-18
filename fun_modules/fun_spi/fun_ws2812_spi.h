@@ -1,3 +1,5 @@
+// Core functions stolen from ch32fun
+
 #include "../../fun_modules/fun_base.h"
 #include "../util_colors.h"
 #include "lib/lib_spi.h"
@@ -22,8 +24,8 @@
 
 static uint16_t WS2812_DMA_BUF[DMA_BUFFER_LEN];
 static volatile int WS2812LEDs;
-static volatile int WS2812LEDPlace;
-static volatile int WS2812BLEDInUse;
+static volatile int WS2812LED_Place;
+static volatile int WS2812BLED_InUse;
 
 uint32_t WS2812BLEDCallback(int ledno);
 
@@ -44,7 +46,7 @@ static void WS2812FillBuffSec(uint16_t * ptr, int numhalfwords, int tce) {
 	int i;
 	uint16_t * end = ptr + numhalfwords;
 	int ledcount = WS2812LEDs;
-	int place = WS2812LEDPlace;
+	int place = WS2812LED_Place;
 
     #ifdef WSRAW
         while( place < 0 && ptr != end ) {
@@ -73,7 +75,7 @@ static void WS2812FillBuffSec(uint16_t * ptr, int numhalfwords, int tce) {
 				if( place == ledcount ) {
 					// Take the DMA out of circular mode and let it expire.
 					DMA1_Channel3->CFGR &= ~DMA_Mode_Circular;
-					WS2812BLEDInUse = 0;
+					WS2812BLED_InUse = 0;
 				}
 				place++;
 			}
@@ -124,7 +126,7 @@ static void WS2812FillBuffSec(uint16_t * ptr, int numhalfwords, int tce) {
         #endif
 	}
 
-	WS2812LEDPlace = place;
+	WS2812LED_Place = place;
 }
 
 //# interrupt handler
@@ -154,7 +156,9 @@ void DMA1_Channel3_IRQHandler( void )  {
 
 
 //# DMA init function
-static void SPI_DMA_WS2812_init(DMA_Channel_TypeDef* DMA_Channel) {
+static void SPI_DMA_WS2812_init(int leds, DMA_Channel_TypeDef* DMA_Channel) {
+    WS2812LEDs = leds;
+
 	// Enable DMA peripheral
 	RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
 
@@ -181,18 +185,17 @@ static void SPI_DMA_WS2812_init(DMA_Channel_TypeDef* DMA_Channel) {
 
 
 //# tick function
-void SPI_DMA_WS2812_tick(int leds) {
+void SPI_DMA_WS2812_tick() {
     // Enter critical section.
 	__disable_irq();
-	WS2812BLEDInUse = 1;
+	WS2812BLED_InUse = 1;
 
     DMA1_Channel3->CFGR &= ~DMA_Mode_Circular;
 	DMA1_Channel3->CNTR  = 0;
 	DMA1_Channel3->MADDR = (uint32_t)WS2812_DMA_BUF;
     
     __enable_irq();
-	WS2812LEDs = leds;
-	WS2812LEDPlace = -WS2812B_RESET_PERIOD;
+	WS2812LED_Place = -WS2812B_RESET_PERIOD;
 
     WS2812FillBuffSec( WS2812_DMA_BUF, DMA_BUFFER_LEN, 0 );
 	DMA1_Channel3->CNTR = DMA_BUFFER_LEN; // Number of unique uint16_t entries.
@@ -423,7 +426,7 @@ void Neo_task(u32 time) {
     if (time - neo_timeRef < 10) return;
     neo_timeRef = time;
     
-    if (WS2812BLEDInUse || leds_frame.is_enabled == 0) return;
+    if (WS2812BLED_InUse || leds_frame.is_enabled == 0) return;
 
     SPI_DMA_WS2812_tick(DMALEDS);
 }

@@ -2,7 +2,7 @@
 #define UTIL_COLORS_H
 
 #include "ch32fun.h"
-#include "luts.h"
+#include "util_luts.h"
 
 typedef union {
     struct {
