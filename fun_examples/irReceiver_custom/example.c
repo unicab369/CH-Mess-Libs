@@ -46,7 +46,7 @@ int main() {
 		.LOGICAL_1_US = 550,
 		.LOGICAL_0_US = 300,
 		.START_SIGNAL_THRESHOLD_US = 1000,
-		.onHandle_data = NULL,
+		.onHandle_data = onHandle_irData,
 		.onHandle_string = onHandle_irString
 	};
 

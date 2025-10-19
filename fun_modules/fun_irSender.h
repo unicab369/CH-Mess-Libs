@@ -25,45 +25,6 @@
 
 // #define IR_SENDER_DEBUGLOG 0
 
-
-// Enable/disable PWM carrier
-static inline void PWM_ON(void)  { TIM1->CCER |=  TIM_CC1NE; }
-static inline void PWM_OFF(void) { TIM1->CCER &= ~TIM_CC1NE; }
-
-//! ####################################
-//! SETUP FUNCTION
-//! ####################################
-
-u8 fun_irSender_init(u8 pin) {
-	funPinMode(pin, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF);
-
-	// Enable TIM1
-	RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
-		
-	// Reset TIM1 to init all regs
-	RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
-	RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
-	
-	// PWM settings
-	TIM1->PSC = 0x0000;			// Prescaler 
-	TIM1->ATRLR = 1263;			// PWM period: 48Mhz/38kHz = 1263
-	TIM1->CH1CVR = 632;			// PWM duty cycle: 50% = 1263/2
-	TIM1->SWEVGR |= TIM_UG;		// Reload immediately
-
-	// CH1 Mode is output, PWM1 (CC1S = 00, OC1M = 110)
-	TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
-	
-	TIM1->BDTR |= TIM_MOE;		// Enable TIM1 outputs
-	TIM1->CTLR1 |= TIM_CEN;		// Enable TIM1
-
-	TIM1->CCER |= TIM_CC1NP;
-	return 1;
-}
-
-//! ####################################
-//! ASYNC TRANSMIT FUNCTIONS
-//! ####################################
-
 #define IR_DATA_BITs_LEN 8
 #define NEC_LOGICAL_1_US 1600
 #define NEC_LOGICAL_0_US 560
@@ -96,6 +57,44 @@ typedef struct {
 	u16 START_LO_US;			// Start_LO spacing in microseconds
 } IR_Sender_t;
 
+// Enable/disable PWM carrier
+static inline void PWM_ON(void)  { TIM1->CCER |=  TIM_CC1NE; }
+static inline void PWM_OFF(void) { TIM1->CCER &= ~TIM_CC1NE; }
+
+//! ####################################
+//! SETUP FUNCTION
+//! ####################################
+
+u8 fun_irSender_init(IR_Sender_t *model) {
+	funPinMode(model->pin, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF);
+
+	// Enable TIM1
+	RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
+		
+	// Reset TIM1 to init all regs
+	RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
+	RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
+	
+	// PWM settings
+	TIM1->PSC = 0x0000;			// Prescaler 
+	TIM1->ATRLR = 1263;			// PWM period: 48Mhz/38kHz = 1263
+	TIM1->CH1CVR = 632;			// PWM duty cycle: 50% = 1263/2
+	TIM1->SWEVGR |= TIM_UG;		// Reload immediately
+
+	// CH1 Mode is output, PWM1 (CC1S = 00, OC1M = 110)
+	TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
+	
+	TIM1->BDTR |= TIM_MOE;		// Enable TIM1 outputs
+	TIM1->CTLR1 |= TIM_CEN;		// Enable TIM1
+
+	TIM1->CCER |= TIM_CC1NP;
+	return 1;
+}
+
+//! ####################################
+//! ASYNC TRANSMIT FUNCTIONS
+//! ####################################
+
 void fun_irSender_asyncSend(IR_Sender_t *model, u8 *data, u16 len) {
 	//! start the pulses
 	model->state = IR_Start_Pulse;
@@ -122,20 +121,22 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 
 	switch (model->state) {
 		case IR_Data_Pulse:
-			//# STEP 4: Handle spacing
-			if (model->logical_spacing > 0) {
-				if (elapsed > model->logical_spacing) {
-					model->logical_spacing = 0;
-					model->time_ref = micros();
-				}
-				break;
-			}
+			// //# STEP 4: Handle spacing - iffy because of timing
+			// if (model->logical_spacing > 0) {
+			// 	if (elapsed > model->logical_spacing) {
+			// 		model->logical_spacing = 0;
+			// 		model->time_ref = micros();
+			// 	}
+			// 	break;
+			// }
 
 			//# STEP 3: send the bit
 			if (model->buffer_idx < model->BUFFER_LEN && 
 				model->remaining_data_bits > 0
 			) {
-				u16 value = model->BUFFER[model->buffer_idx];
+				u8 value = model->BUFFER[model->buffer_idx];
+				// printf("%02X ", value);
+
 				u8 bit = (value >> (model->remaining_data_bits-1)) & 1;
 				// printf("Sending Value: 0x%04X, remaining: %d\n", value, model->remaining_data_bits);
 				model->remaining_data_bits--;
@@ -159,8 +160,8 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			
 				//! ORDER DOES MATTER. requires new micros() bc carrier pulse is blocking
 				model->time_ref = micros();
-				// // Bypass for STEP 4 - use for debugging only
-				// Delay_Us(model->logical_spacing);
+				// Bypass for STEP 4 - use for debugging only
+				Delay_Us(model->logical_spacing);
 
 				if (model->remaining_data_bits == 0) {
 					model->remaining_data_bits = IR_DATA_BITs_LEN; // reload remaining data bits

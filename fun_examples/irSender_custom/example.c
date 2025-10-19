@@ -8,13 +8,10 @@ int main() {
 	Delay_Ms(100);
 	funGpioInitAll();
 
-	printf("\r\nIR Sender Test 1.\r\n");
-	u8 mode = fun_irSender_init(IR_SENDER_PIN);
-	printf("Mode: %s\r\n", mode ? "PWM" : "Manual GPIO");
-
-	u32 time_ref = millis();
 
 	IR_Sender_t irSender = {
+		.pin = IR_SENDER_PIN,
+		
 		//! Default to NEC protocol
 		// .LOGICAL_1_US = 0,
 
@@ -25,10 +22,17 @@ int main() {
 		.START_LO_US = 2500
 	};
 
-	u8 data_out[] = { 0x00, 0xFF, 0xAA, 0x11, 0x22, 0x33, 0x44 };
+	printf("\r\nIR Sender Test 1.\r\n");
+	u8 mode = fun_irSender_init(&irSender);
+
+	u8 send_mode = 0;
+	u8 data_out[] = { 0x00, 0xFF, 0xAA, 0x11, 0x22, 0x33, 0x44, 0x55,
+						0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD };
+	u8 str_out[64] = "ST Hello World!";
+	u32 moment = millis();
 
 	while(1) {
-		if ((millis() - time_ref) > 2000) {
+		if ((millis() - moment) > 2000) {
 			// u64 combined = combine_64(address, command, extra, 0x00);
 			// u16 crc = crc16_ccitt_compute(combined);
 
@@ -43,10 +47,20 @@ int main() {
 			// 		(uint32_t)(combined2 & 0xFFFFFFFF));
 			// #endif
 
-			printf("Sendding message\n");
-			fun_irSender_asyncSend(&irSender, data_out, sizeof(data_out));
+			printf("\nSendding message\n");
 
-			time_ref = millis();
+			if (send_mode) {
+				fun_irSender_asyncSend(&irSender, data_out, sizeof(data_out));
+			} else {
+				// Safe string formatting
+				int len = snprintf(str_out, sizeof(str_out), "ST HELLO WORLD %lu", moment);
+				if (len > 0 && len < sizeof(str_out)) {
+					fun_irSender_asyncSend(&irSender, str_out, len);
+				}
+			}
+			
+			send_mode = !send_mode;
+			moment = millis();
 		}
 
 		fun_irSender_asyncTask(&irSender);

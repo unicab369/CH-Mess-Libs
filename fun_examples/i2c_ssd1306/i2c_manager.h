@@ -175,6 +175,8 @@ void i2c_menu_handle() {
 	}
 }
 
+char IR_Receive_Str[SSD1306_MAX_STR_LEN] = { 0 };
+
 u8 i2c_menu_period_tick() {
 	if (is_main_menu) return 0;
 	static char str_output[SSD1306_MAX_STR_LEN] = { 0 };
@@ -223,6 +225,12 @@ u8 i2c_menu_period_tick() {
 		case 3: {
 			sprintf(str_output, "IR Receiving %d", irCount++);
 			i2c_menu_render_text_at(0, str_output);
+
+			// get the ir string
+			// sprintf(str_output, "%s", IR_Receive_Str);
+			i2c_menu_render_text_at(1, IR_Receive_Str);
+			memset(IR_Receive_Str, 0, sizeof(IR_Receive_Str));
+
 			ssd1306_draw_all();
 			return 1;
 		}

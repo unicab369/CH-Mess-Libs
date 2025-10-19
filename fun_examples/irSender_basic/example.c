@@ -153,11 +153,7 @@ void _irSend_Custom_TestString() {
 	_IR_carrier_pulse(3000);
 	Delay_Us(3000);
 
-	u8 data[] = "HELLO WOLRD 12345678901234567890123456890";
-
-	for (int i = 0; i < 3; i++) {
-		_send_Custom_Byte(0xFA);
-	}
+	u8 data[] = "ST HELLO WOLRD 12345678901234567890123456890";
 
 	for (int i = 0; i < sizeof(data); i++) {
 		_send_Custom_Byte(data[i]);

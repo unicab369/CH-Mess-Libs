@@ -36,8 +36,8 @@ void onHandle_Button(Button_Event_e event, u32 time) {
 
 
 #define IR_RECEIVER_LINE_LOG 255
-#define MAX_WORDS_LEN 200
-u16 WORD_BUFFER[MAX_WORDS_LEN] = {0};
+#define IR_RECEIVE_MAX_LEN 64
+u16 IR_RECEIVE_BUF[IR_RECEIVE_MAX_LEN] = {0};
 
 //# IR Receiver Callback
 void onHandle_irReceiver(u16 *words, u16 len) {
@@ -103,6 +103,10 @@ void _irSend_CustomTestData() {
 	_IR_carrier_pulse(NfS_LOGIC_0_WIDTH_US);
 }
 
+void onHandle_irString(const char* str) {
+	printf("\nIR Received String: %s\n", str);
+	memcpy(IR_Receive_Str, str, SSD1306_MAX_STR_LEN);
+}
 
 int main() {
 	SystemInit();
@@ -127,22 +131,29 @@ int main() {
 
 	//# IR Sender
 	IR_Sender_t irSender = {
-		// .IR_MODE = 0			// NEC protocol
-		.IR_MODE = 1			// NfS1 protocol
+		.pin = IR_SENDER_PIN,
+
+		//! NfS protocol
+		.LOGICAL_1_US = 550,
+		.LOGICAL_0_US = 300,
+		.START_HI_US = 2500,
+		.START_LO_US = 2500
 	};
 
-	u8 mode = fun_irSender_init(IR_SENDER_PIN);
-	static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111, 0x2222, 0x3333, 0x4444 };
-	irSender.BUFFER = data_out;
-	irSender.BUFFER_LEN = 7;
+	u8 mode = fun_irSender_init(&irSender);
 
 	//# IR Receiver
 	IR_Receiver_t receiver = {
 		.pin = IR_RECEIVER_PIN,
-		.WORD_BUFFER_LEN = MAX_WORDS_LEN,
-		.WORD_BUFFER = WORD_BUFFER,
-		// .IR_MODE = 0				// NEC protocol
-		.IR_MODE = 1				// NfS protocol
+		.RECEIVE_MAX_LEN = IR_RECEIVE_MAX_LEN,
+		.RECEIVE_BUF = IR_RECEIVE_BUF,
+
+		//! NfS protocol
+		.LOGICAL_1_US = 550,
+		.LOGICAL_0_US = 300,
+		.START_SIGNAL_THRESHOLD_US = 1000,
+		// .onHandle_data = onHandle_irData,
+		.onHandle_string = onHandle_irString
 	};
 
 	fun_irReceiver_init(&receiver);
@@ -150,6 +161,8 @@ int main() {
 	//# start loop
 	u32 time_ref = millis();
 	u32 counter = 0;
+
+	u8 str_out[64];
 
 	while(1) {
 		u32 moment = millis();
@@ -173,7 +186,8 @@ int main() {
 				switch (menu_selectedIdx) {
 					case 2: {
 						printf("Sending Ir message\n");
-						fun_irSender_asyncSend(&irSender);
+						sprintf(str_out, "ST Hello Bee %ld", counter++);
+						fun_irSender_asyncSend(&irSender, str_out, strlen(str_out));
 						// _irSend_CustomTestData();
 						break;
 					}
@@ -187,12 +201,10 @@ int main() {
 		if (!is_main_menu) {
 			switch (menu_selectedIdx) {
 				case 2:
-					printf("case 2\n");
 					fun_irSender_asyncTask(&irSender);
 					break;
 				case 3:
-					printf("case 3\n");
-					fun_irReceiver_task(&receiver, onHandle_irReceiver);
+					fun_irReceiver_task(&receiver);
 					break;
 				default:
 					break;

@@ -101,9 +101,9 @@ void _irReceiver_processBuffer(IR_Receiver_t *model) {
 	//! make callback
 	if (model->byte_idx > 0) {
 		if (model->byte_idx > 3 && model->onHandle_string &&
-			model->RECEIVE_BUF[0] == 0xFA && 
-			model->RECEIVE_BUF[1] == 0xFA &&
-			model->RECEIVE_BUF[2] == 0xFA
+			model->RECEIVE_BUF[0] == 'S' && 
+			model->RECEIVE_BUF[1] == 'T' &&
+			model->RECEIVE_BUF[2] == ' '
 		) {
 			model->onHandle_string((const char*)(model->RECEIVE_BUF + 3));
 		}
@@ -114,8 +114,8 @@ void _irReceiver_processBuffer(IR_Receiver_t *model) {
 	model->prev_state = model->current_state;
 
 	//! Reset values
-	memset(model->BIT_BUFFER, 0, BYTE_BITS_LEN * sizeof(u16));
-	memset(model->RECEIVE_BUF, 0, model->RECEIVE_MAX_LEN * sizeof(u8));
+	memset(model->BIT_BUFFER, 0, sizeof(model->BIT_BUFFER));
+	memset(model->RECEIVE_BUF, 0, model->RECEIVE_MAX_LEN);
 	model->bit_idx = 0;
 	model->byte_idx = 0;
 
