@@ -120,7 +120,7 @@ void _irSend_CustomTestData() {
 	u8 data = 0x00;
 
 	// loop through the data
-	for (int i = 0; i < 150; i++) {
+	for (int i = 0; i < 300; i++) {
 		// loop through the bits
 		for (int i = 7; i >= 0; i--)  {
 			u8 bit = (data >> i) & 1;        // MSB first
@@ -154,10 +154,10 @@ int main() {
 	u8 mode = _irSender_init(IR_SENDER_PIN);
 	printf("Mode: %s\r\n", mode ? "PWM" : "Manual GPIO");
 
-	u32 time_ref = millis();
+	u32 moment = millis();
 
 	while(1) {
-		if ((millis() - time_ref) > 3000) {
+		if ((millis() - moment) > 3000) {
 			u32 ref = millis();
 
 			static u8 data_out[] = { 0x00, 0xFF, 0xAA, 0x11 };
@@ -169,7 +169,7 @@ int main() {
 			#endif
 
 			printf("messages in %d ms\r\n", millis() - ref);
-			time_ref = millis();
+			moment = millis();
 		}
 	}
 }

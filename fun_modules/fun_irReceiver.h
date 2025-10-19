@@ -116,25 +116,22 @@ void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u8*, u16)) 
 //* TASK FUNCTION
 void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 	if (model->pin == -1) return;
-	model->current_state = funDigitalRead(model->pin);
+	u8 new_state = funDigitalRead(model->pin);
 	u32 moment = micros();
 
 	//! check for state change
-	if (model->current_state != model->prev_state) {
+	if (new_state != model->prev_state) {
 		u16 elapsed = moment - model->time_ref;
 
 		//# STEP 1: Filter out high thresholds
-		u8 filter_signal = elapsed < IR_START_SIGNAL_THRESHOLD_US;
-
 		// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
-		if (model->IR_MODE == 0) {
-			filter_signal = filter_signal && !model->current_state;
-		}
+		u8 valid_signal = (elapsed < IR_START_SIGNAL_THRESHOLD_US) && 
+						(model->IR_MODE != 0 || !new_state);
 
-		if (filter_signal) {
+		if (valid_signal) {
 			//! prevent overflow
 			if (model->byte_idx >= model->RECEIVE_BUF_LEN) {
-				printf("max words: %d\n", model->byte_idx);
+				printf("max byte reached: %d\n", model->byte_idx);
 
 				//# STEP 3: Process Buffer when it's full
 				_irReceiver_processBuffer(model, handler);
@@ -149,27 +146,21 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 				UTIL_DebugBuffer_addValue(&debug_buffer, elapsed);
 			#endif
 
-			// handle bit shifting
-			u16 delta_1 = ABS(IR_LOGICAL_1_US - elapsed);
-			u16 delta_0 = ABS(IR_LOGICAL_0_US - elapsed);
-			int bit = delta_1 < delta_0;
+			// Determine bit value
+			int bit = ABS(IR_LOGICAL_1_US - elapsed) < ABS(IR_LOGICAL_0_US - elapsed);
+			u8 bit_pos = 7 - (model->bit_buf_idx % 8);
 
-			u8 bit_pos = 7 - (model->bit_buf_idx % 8);  // MSB first for 8-bit bytes
+			// Set bit in current byte (MSB first)
+			if (bit) model->RECEIVE_BUF[model->byte_idx] |= 1 << bit_pos;
 
-			// MSB first (reversed)
-			u8 *data = &model->RECEIVE_BUF[model->byte_idx];
-			if (bit) *data |= 1 << bit_pos;
-			model->bit_buf_idx++;		// next bit
-
-            // Move to next byte after collecting 8 bits
-            if (model->bit_buf_idx >= 8) {
+            // Increment and handle byte completion
+            if (++model->bit_buf_idx >= 8) {
                 model->byte_idx++;        // next byte
                 model->bit_buf_idx = 0;   // reset bit counter
             }
 		}
 
-		model->time_ref = micros();
-		model->timeout_ref = micros();
+		model->time_ref = model->timeout_ref = micros();
 	}
 
 	//# STEP 4: Timeout handler
@@ -184,6 +175,6 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 		#endif
 	}
 
-	model->prev_state = model->current_state;
+	model->prev_state = model->current_state = new_state;
 	UTIL_cycleInfo_updateWithLimit(&ir_cycle, micros() - moment, 50);
 }

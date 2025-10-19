@@ -62,6 +62,8 @@
 #define LOG_STYLE_HIDDEN		8
 #define LOG_STYLE_STRIKE		9
 
+void LOG(uint8_t style, uint8_t color, const char *tag, char *format, ...);
+
 #if (CONFIG_DEBUG_ENABLE_LOGS)
 	// Log with style
 	#define SLOG_Debug(style, tag, f_, ...)		LOG(style, LOG_COLOR_NORMAL, tag, (f_), ##__VA_ARGS__)

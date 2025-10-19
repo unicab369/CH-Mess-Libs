@@ -5,7 +5,7 @@
 // how many lines of log to show when printing long data
 #define IR_RECEIVER_LINE_LOG 255
 
-#define RECEIVE_BUFFER_LEN 200
+#define RECEIVE_BUFFER_LEN 300
 u8 RECEIVE_BUF[RECEIVE_BUFFER_LEN] = {0};
 
 void onHandle_irReceiver(u8 *data, u16 len) {
