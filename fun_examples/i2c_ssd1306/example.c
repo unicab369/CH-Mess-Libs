@@ -122,11 +122,14 @@ int main() {
 	// Encoder_t encoder_a;
 	// fun_encoder_tim2_init(&encoder_a);
 
+	//# Encoder
 	Encoder_GPIO_t encoder_b = {
 		.pinA = PD4,
 		.pinB = PD3,
 	};
 	fun_encoder_gpio_init(&encoder_b);
+
+	//# I2C
 	i2c_menu_init();
 
 	//# IR Sender
