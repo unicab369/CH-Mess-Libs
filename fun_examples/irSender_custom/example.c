@@ -15,15 +15,16 @@ int main() {
 	u32 time_ref = millis();
 
 	IR_Sender_t irSender = {
-		// .IR_MODE = 0			// NEC protocol
-		.IR_MODE = 1			// NfS1 protocol
+		//! NEC protocol
+		// .LOGICAL_1_US = 1600,
+		// .LOGICAL_0_US = 560,
+
+		//! NfS protocol
+		.LOGICAL_1_US = 550,
+		.LOGICAL_0_US = 300,
 	};
 
-	static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111, 0x2222, 0x3333, 0x4444 };
-	irSender.BUFFER = data_out;
-	irSender.BUFFER_LEN = 7;
-
-	fun_irSender_asyncSend(&irSender);
+	u8 data_out[] = { 0x00, 0xFF, 0xAA, 0x11, 0x22, 0x33, 0x44 };
 
 	while(1) {
 		if ((millis() - time_ref) > 2000) {
@@ -42,7 +43,7 @@ int main() {
 			// #endif
 
 			printf("Sendding message\n");
-			fun_irSender_asyncSend(&irSender);
+			fun_irSender_asyncSend(&irSender, data_out, sizeof(data_out));
 
 			time_ref = millis();
 		}

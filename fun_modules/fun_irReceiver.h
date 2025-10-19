@@ -47,7 +47,7 @@
 	};
 #endif
 
-#define IR_RECEIVER_BITBUFFER_LEN 16
+#define IR_RECEIVER_BITBUFFER_LEN 8
 
 typedef struct {
 	u8 pin;
@@ -57,9 +57,9 @@ typedef struct {
 	u32 time_ref, timeout_ref;
 
 	u8 IR_MODE;				// 0 = NEC protocol, 1 = NfS1 protocol
-	u16 WORD_BUFFER_LEN;
-	u16 *WORD_BUFFER;
-	u16 word_idx;
+	u8 *RECEIVE_BUF;
+	u16 RECEIVE_BUF_LEN;
+	u16 byte_idx;
 } IR_Receiver_t;
 
 Cycle_Info_t ir_cycle;
@@ -96,16 +96,16 @@ void fun_irReceiver_init(IR_Receiver_t* model) {
 }
 
 //* PROCESS BUFFER FUNCTION
-void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u16*, u16)) {
+void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u8*, u16)) {
 	//! make callback
-	if (model->word_idx > 0) handler(model->WORD_BUFFER, model->word_idx);
+	if (model->byte_idx > 0) handler(model->RECEIVE_BUF, model->byte_idx);
 	model->prev_state = model->current_state;
 
 	//! Reset values
 	memset(model->BIT_BUFFER, 0, IR_RECEIVER_BITBUFFER_LEN * sizeof(u16));
 	model->bit_buf_idx = 0;
-	memset(model->WORD_BUFFER, 0, model->WORD_BUFFER_LEN * sizeof(u16));
-	model->word_idx = 0;
+	memset(model->RECEIVE_BUF, 0, model->RECEIVE_BUF_LEN * sizeof(u8));
+	model->byte_idx = 0;
 
 	//# Debug log
 	#ifdef IR_RECEIVER_DEBUG_LOG
@@ -114,7 +114,7 @@ void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u16*, u16))
 }
 
 //* TASK FUNCTION
-void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
+void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 	if (model->pin == -1) return;
 	model->current_state = funDigitalRead(model->pin);
 	u32 moment = micros();
@@ -133,8 +133,8 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 
 		if (filter_signal) {
 			//! prevent overflow
-			if (model->word_idx >= model->WORD_BUFFER_LEN) {
-				printf("max words: %d\n", model->word_idx);
+			if (model->byte_idx >= model->RECEIVE_BUF_LEN) {
+				printf("max words: %d\n", model->byte_idx);
 
 				//# STEP 3: Process Buffer when it's full
 				_irReceiver_processBuffer(model, handler);
@@ -154,18 +154,18 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u16*, u16)) {
 			u16 delta_0 = ABS(IR_LOGICAL_0_US - elapsed);
 			int bit = delta_1 < delta_0;
 
-			u32 bit_pos = 15 - (model->bit_buf_idx & 0x0F);  // &0x0F is %16
+			u8 bit_pos = 7 - (model->bit_buf_idx % 8);  // MSB first for 8-bit bytes
 
 			// MSB first (reversed)
-			u16 *current_word = &model->WORD_BUFFER[model->word_idx];
-			if (bit) *current_word |= 1 << bit_pos;
+			u8 *data = &model->RECEIVE_BUF[model->byte_idx];
+			if (bit) *data |= 1 << bit_pos;
+			model->bit_buf_idx++;		// next bit
 
-			if (bit_pos == 0) {
-				model->word_idx++;			// next word
-				model->bit_buf_idx = 0;		// reset the buffer
-			} else {
-				model->bit_buf_idx++;		// next bit
-			}
+            // Move to next byte after collecting 8 bits
+            if (model->bit_buf_idx >= 8) {
+                model->byte_idx++;        // next byte
+                model->bit_buf_idx = 0;   // reset bit counter
+            }
 		}
 
 		model->time_ref = micros();

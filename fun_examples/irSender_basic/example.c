@@ -1,6 +1,6 @@
 #include "../../fun_modules/fun_base.h"
 
-#define IR_USE_NEC_PROTOCOL
+// #define IR_USE_NEC_PROTOCOL
 #define IR_USE_TIM1_PWM
 
 #define IR_SENDER_PIN PD0
@@ -89,14 +89,14 @@ void _IR_carrier_pulse(u32 duration_us) {
 }
 
 //* SEND NEC (BLOCKING)
-void _irSender_sendNEC_blocking(u16* data, u8 len) {
+void _irSender_sendNEC_blocking(u8* data, u8 len) {
 	_IR_carrier_pulse(3000);
 	Delay_Us(3000);
 
 	// loop through the data
 	for (int k = 0; k < len; k++) {
 		// loop through the bits
-		for (int i = 15; i >= 0; i--) {
+		for (int i = 7; i >= 0; i--) {
 			u8 bit = (data[k] >> i) & 1;		// MSB first
 			u32 space = bit ? NEC_LOGIC_1_WIDTH_US : NEC_LOGIC_0_WIDTH_US;
 			
@@ -117,12 +117,12 @@ void _irSend_CustomTestData() {
 	_IR_carrier_pulse(3000);
 	Delay_Us(3000);
 
-	u16 data = 0x0000;
+	u8 data = 0x00;
 
 	// loop through the data
 	for (int i = 0; i < 150; i++) {
 		// loop through the bits
-		for (int i = 15; i >= 0; i--)  {
+		for (int i = 7; i >= 0; i--)  {
 			u8 bit = (data >> i) & 1;        // MSB first
 			u32 space = bit ? NfS_LOGIC_1_WIDTH_US : NfS_LOGIC_0_WIDTH_US;
 
@@ -160,7 +160,7 @@ int main() {
 		if ((millis() - time_ref) > 3000) {
 			u32 ref = millis();
 
-			static u16 data_out[] = { 0x0000, 0xFFFF, 0xAAAA, 0x1111 };
+			static u8 data_out[] = { 0x00, 0xFF, 0xAA, 0x11 };
 
 			#ifdef IR_USE_NEC_PROTOCOL
 				_irSender_sendNEC_blocking(data_out, 4);	

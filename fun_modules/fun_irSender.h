@@ -64,7 +64,9 @@ u8 fun_irSender_init(u8 pin) {
 //! ASYNC TRANSMIT FUNCTIONS
 //! ####################################
 
-#define IR_DATA_BITs_LEN 16
+#define IR_DATA_BITs_LEN 8
+#define NEC_LOGICAL_1_US 1600
+#define NEC_LOGICAL_0_US 560
 
 typedef enum {
 	IR_Start_Pulse,
@@ -82,33 +84,25 @@ typedef struct {
 	u16 remaining_data_bits;	// number of bits (of a word) to send
 	u16 logical_spacing;		// spacing that represents logic output
 
-	u16 *BUFFER;				// words buffer
+	u8 *BUFFER;					// words buffer
 	s16 BUFFER_LEN;				// words buffer length
 	s16 buffer_idx;				// current buffer index
-	u8 IR_MODE;					// 0 = NEC protocol, 1 = NfS1 protocol
+
+	u16 LOGICAL_1_US;			// Logical_1 spacing in microseconds
+	u16 LOGICAL_0_US;			// Logical_0 spacing in microseconds
 } IR_Sender_t;
 
-
-u32 sending_data = 0x00FFA56D;
-
-static u16 IR_RECEIVER_LOGICAL_1_US = 1600;
-static u16 IR_RECEIVER_LOGICAL_0_US = 560;
-
-void fun_irSender_asyncSend(IR_Sender_t *model) {
+void fun_irSender_asyncSend(IR_Sender_t *model, u8 *data, u16 len) {
 	//! start the pulses
 	model->state = IR_Start_Pulse;
 	model->time_ref = micros();
 	model->buffer_idx = 0;
+	model->BUFFER = data;
+	model->BUFFER_LEN = len;
 
-	switch (model->IR_MODE) {
-		case 0:
-			IR_RECEIVER_LOGICAL_1_US = 1600;
-			IR_RECEIVER_LOGICAL_0_US = 560;
-			break;
-		case 1:
-			IR_RECEIVER_LOGICAL_1_US = 550;
-			IR_RECEIVER_LOGICAL_0_US = 300;
-			break;
+	if (model->LOGICAL_1_US < 250 || model->LOGICAL_0_US < 250) {
+		model->LOGICAL_1_US = NEC_LOGICAL_1_US;
+		model->LOGICAL_0_US = NEC_LOGICAL_0_US;
 	}
 }
 
@@ -137,12 +131,12 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				u8 bit = (value >> (model->remaining_data_bits-1)) & 1;
 				// printf("Sending Value: 0x%04X, remaining: %d\n", value, model->remaining_data_bits);
 				model->remaining_data_bits--;
-				model->logical_spacing = bit ? IR_RECEIVER_LOGICAL_1_US : IR_RECEIVER_LOGICAL_0_US;
+				model->logical_spacing = bit ? model->LOGICAL_1_US : model->LOGICAL_0_US;
 
 				// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
-				if (model->IR_MODE == 0) {
+				if (model->LOGICAL_1_US == NEC_LOGICAL_1_US) {
 					PWM_ON();
-					Delay_Us(IR_RECEIVER_LOGICAL_0_US);
+					Delay_Us(model->LOGICAL_0_US);
 					PWM_OFF();
 				}
 				// Custom protocol uses any of the PWM states for LOGICAL value
@@ -168,7 +162,7 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			else {
 				//# STEP 4: DONE - terminating signal
 				PWM_ON();
-				Delay_Us(IR_RECEIVER_LOGICAL_0_US);
+				Delay_Us(model->LOGICAL_0_US);
 				PWM_OFF();
 				model->state = IR_Idle;
 			}
