@@ -47,26 +47,32 @@
 	};
 #endif
 
-#define IR_RECEIVER_BITBUFFER_LEN 8
+#define BYTE_BITS_LEN 8
+#define IR_NEC_LOGICAL_1_US 1600
+#define IR_NEC_LOGICAL_0_US 560
+#define IR_NEC_START_SIGNAL_THRESHOLD_US 2200
 
 typedef struct {
 	u8 pin;
-	u16 BIT_BUFFER[IR_RECEIVER_BITBUFFER_LEN];
-	u16 bit_buf_idx;
+	u16 BIT_BUFFER[BYTE_BITS_LEN];
+	u16 bit_idx;
 	u8 prev_state, current_state;
 	u32 time_ref, timeout_ref;
 
 	u8 IR_MODE;				// 0 = NEC protocol, 1 = NfS1 protocol
 	u8 *RECEIVE_BUF;
-	u16 RECEIVE_BUF_LEN;
+	u16 RECEIVE_MAX_LEN;
 	u16 byte_idx;
+
+	u16 LOGICAL_1_US;					// LOGICAL_1 in microseconds
+	u16 LOGICAL_0_US;					// LOGICAL_0 in microseconds
+	u16 START_SIGNAL_THRESHOLD_US;		// START_SIGNAL_THRESHOLD in microseconds
+	void (*onHandle_data)(u8*, u16);
+	void (*onHandle_string)(const char* str);
 } IR_Receiver_t;
 
 Cycle_Info_t ir_cycle;
 
-static u16 IR_START_SIGNAL_THRESHOLD_US = 2200;
-static u16 IR_LOGICAL_1_US = 1600;
-static u16 IR_LOGICAL_0_US = 560;
 
 //* INIT FUNCTION
 void fun_irReceiver_init(IR_Receiver_t* model) {
@@ -74,21 +80,16 @@ void fun_irReceiver_init(IR_Receiver_t* model) {
 	funPinMode(model->pin, GPIO_CFGLR_IN_PUPD);
 	funDigitalWrite(model->pin, 1);
 
-	switch (model->IR_MODE) {
-		case 0:
-			IR_START_SIGNAL_THRESHOLD_US = 2200;
-			IR_LOGICAL_1_US = 1600;
-			IR_LOGICAL_0_US = 560;
-			break;
-		case 1:
-			IR_START_SIGNAL_THRESHOLD_US = 800;
-			IR_LOGICAL_1_US = 550;
-			IR_LOGICAL_0_US = 300;
-			break;
+	if (model-> LOGICAL_1_US < 250 || model->LOGICAL_0_US < 250 
+		|| model->START_SIGNAL_THRESHOLD_US < 500
+	) {
+		model->LOGICAL_1_US = IR_NEC_LOGICAL_1_US;
+		model->LOGICAL_0_US = IR_NEC_LOGICAL_0_US;
+		model->START_SIGNAL_THRESHOLD_US = IR_NEC_START_SIGNAL_THRESHOLD_US;
 	}
-
+	
 	//! restart states
-	model->bit_buf_idx = 0,
+	model->bit_idx = 0,
 	model->prev_state = 0,
 	model->current_state = 0,
 
@@ -96,15 +97,26 @@ void fun_irReceiver_init(IR_Receiver_t* model) {
 }
 
 //* PROCESS BUFFER FUNCTION
-void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u8*, u16)) {
+void _irReceiver_processBuffer(IR_Receiver_t *model) {
 	//! make callback
-	if (model->byte_idx > 0) handler(model->RECEIVE_BUF, model->byte_idx);
+	if (model->byte_idx > 0) {
+		if (model->byte_idx > 3 && model->onHandle_string &&
+			model->RECEIVE_BUF[0] == 0xFA && 
+			model->RECEIVE_BUF[1] == 0xFA &&
+			model->RECEIVE_BUF[2] == 0xFA
+		) {
+			model->onHandle_string((const char*)(model->RECEIVE_BUF + 3));
+		}
+		else if (model->onHandle_data) {
+			model->onHandle_data(model->RECEIVE_BUF, model->byte_idx);
+		}
+	}
 	model->prev_state = model->current_state;
 
 	//! Reset values
-	memset(model->BIT_BUFFER, 0, IR_RECEIVER_BITBUFFER_LEN * sizeof(u16));
-	model->bit_buf_idx = 0;
-	memset(model->RECEIVE_BUF, 0, model->RECEIVE_BUF_LEN * sizeof(u8));
+	memset(model->BIT_BUFFER, 0, BYTE_BITS_LEN * sizeof(u16));
+	memset(model->RECEIVE_BUF, 0, model->RECEIVE_MAX_LEN * sizeof(u8));
+	model->bit_idx = 0;
 	model->byte_idx = 0;
 
 	//# Debug log
@@ -114,7 +126,7 @@ void _irReceiver_processBuffer(IR_Receiver_t *model, void (*handler)(u8*, u16)) 
 }
 
 //* TASK FUNCTION
-void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
+void fun_irReceiver_task(IR_Receiver_t* model) {
 	if (model->pin == -1) return;
 	u8 new_state = funDigitalRead(model->pin);
 	u32 moment = micros();
@@ -125,21 +137,20 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 
 		//# STEP 1: Filter out high thresholds
 		// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
-		u8 valid_signal = (elapsed < IR_START_SIGNAL_THRESHOLD_US) && 
-						(model->IR_MODE != 0 || !new_state);
+		u8 valid_signal = (elapsed < model->START_SIGNAL_THRESHOLD_US) && 
+						(model->LOGICAL_1_US != IR_NEC_LOGICAL_1_US || !new_state);
 
 		if (valid_signal) {
 			//! prevent overflow
-			if (model->byte_idx >= model->RECEIVE_BUF_LEN) {
+			if (model->byte_idx >= model->RECEIVE_MAX_LEN) {
 				printf("max byte reached: %d\n", model->byte_idx);
-
 				//# STEP 3: Process Buffer when it's full
-				_irReceiver_processBuffer(model, handler);
+				_irReceiver_processBuffer(model);
 				return;
 			}
 
 			//# STEP 2: collect data
-			model->BIT_BUFFER[model->bit_buf_idx] = elapsed;
+			model->BIT_BUFFER[model->bit_idx] = elapsed;
 
 			//# Debug log
 			#ifdef IR_RECEIVER_DEBUG_LOG
@@ -147,16 +158,15 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 			#endif
 
 			// Determine bit value
-			int bit = ABS(IR_LOGICAL_1_US - elapsed) < ABS(IR_LOGICAL_0_US - elapsed);
-			u8 bit_pos = 7 - (model->bit_buf_idx % 8);
-
+			int bit = ABS(model->LOGICAL_1_US - elapsed) < ABS(model->LOGICAL_0_US - elapsed);
+			u8 bit_pos = 7 - (model->bit_idx % 8);
 			// Set bit in current byte (MSB first)
 			if (bit) model->RECEIVE_BUF[model->byte_idx] |= 1 << bit_pos;
 
             // Increment and handle byte completion
-            if (++model->bit_buf_idx >= 8) {
+            if (++model->bit_idx >= 8) {
                 model->byte_idx++;        // next byte
-                model->bit_buf_idx = 0;   // reset bit counter
+                model->bit_idx = 0;   // reset bit counter
             }
 		}
 
@@ -168,7 +178,7 @@ void fun_irReceiver_task(IR_Receiver_t* model, void (*handler)(u8*, u16)) {
 		model->timeout_ref = micros();
 
 		//! process the buffer
-		_irReceiver_processBuffer(model, handler);
+		_irReceiver_processBuffer(model);
 
 		#ifdef IR_RECEIVER_CYCLE_LOG
 			UTIL_cycleInfo_flush(&ir_cycle);		// flush cycle

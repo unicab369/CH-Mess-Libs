@@ -111,9 +111,29 @@ void _irSender_sendNEC_blocking(u8* data, u8 len) {
 	_IR_carrier_pulse(NEC_LOGIC_0_WIDTH_US);
 }
 
-//* SEND CUSTOM TEST (BLOCKING)
-void _irSend_CustomTestData() {
+
+void _send_Custom_Byte(u8 data) {
 	static u8 state = 0;
+
+	// loop through the bits
+	for (int i = 7; i >= 0; i--)  {
+		u8 bit = (data >> i) & 1;        // MSB first
+		u32 space = bit ? NfS_LOGIC_1_WIDTH_US : NfS_LOGIC_0_WIDTH_US;
+
+		//! Custom protocol does not need a signal pulse
+		//! it uses any of the GPIO states spacing LOGICAL value
+		if (state == 0) {
+			_IR_carrier_pulse(space);
+		} else {
+			Delay_Us(space);
+		}
+		
+		state = !state;
+	}
+}
+
+//* SEND CUSTOM TEST (BLOCKING)
+void _irSend_Custom_TestData() {
 	_IR_carrier_pulse(3000);
 	Delay_Us(3000);
 
@@ -121,23 +141,26 @@ void _irSend_CustomTestData() {
 
 	// loop through the data
 	for (int i = 0; i < 300; i++) {
-		// loop through the bits
-		for (int i = 7; i >= 0; i--)  {
-			u8 bit = (data >> i) & 1;        // MSB first
-			u32 space = bit ? NfS_LOGIC_1_WIDTH_US : NfS_LOGIC_0_WIDTH_US;
-
-			//! Custom protocol does not need a signal pulse
-			//! it uses any of the GPIO states spacing LOGICAL value
-			if (state == 0) {
-				_IR_carrier_pulse(space);
-			} else {
-				Delay_Us(space);
-			}
-			
-			state = !state;
-		}
-
+		_send_Custom_Byte(data);
 		data++;
+	}
+
+	// terminating signals
+	_IR_carrier_pulse(NfS_LOGIC_0_WIDTH_US);
+}
+
+void _irSend_Custom_TestString() {
+	_IR_carrier_pulse(3000);
+	Delay_Us(3000);
+
+	u8 data[] = "HELLO WOLRD 12345678901234567890123456890";
+
+	for (int i = 0; i < 3; i++) {
+		_send_Custom_Byte(0xFA);
+	}
+
+	for (int i = 0; i < sizeof(data); i++) {
+		_send_Custom_Byte(data[i]);
 	}
 
 	// terminating signals
@@ -165,7 +188,8 @@ int main() {
 			#ifdef IR_USE_NEC_PROTOCOL
 				_irSender_sendNEC_blocking(data_out, 4);	
 			#else
-				_irSend_CustomTestData();
+				// _irSend_Custom_TestData();
+				_irSend_Custom_TestString();
 			#endif
 
 			printf("messages in %d ms\r\n", millis() - ref);
