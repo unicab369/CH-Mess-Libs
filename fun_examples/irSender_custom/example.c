@@ -15,13 +15,14 @@ int main() {
 	u32 time_ref = millis();
 
 	IR_Sender_t irSender = {
-		//! NEC protocol
-		// .LOGICAL_1_US = 1600,
-		// .LOGICAL_0_US = 560,
+		//! Default to NEC protocol
+		// .LOGICAL_1_US = 0,
 
 		//! NfS protocol
 		.LOGICAL_1_US = 550,
 		.LOGICAL_0_US = 300,
+		.START_HI_US = 2500,
+		.START_LO_US = 2500
 	};
 
 	u8 data_out[] = { 0x00, 0xFF, 0xAA, 0x11, 0x22, 0x33, 0x44 };

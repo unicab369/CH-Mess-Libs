@@ -67,6 +67,8 @@ u8 fun_irSender_init(u8 pin) {
 #define IR_DATA_BITs_LEN 8
 #define NEC_LOGICAL_1_US 1600
 #define NEC_LOGICAL_0_US 560
+#define NEC_START_HI_US 9000
+#define NEC_START_LO_US 4500
 
 typedef enum {
 	IR_Start_Pulse,
@@ -90,6 +92,8 @@ typedef struct {
 
 	u16 LOGICAL_1_US;			// Logical_1 spacing in microseconds
 	u16 LOGICAL_0_US;			// Logical_0 spacing in microseconds
+	u16 START_HI_US;			// Start_HI spacing in microseconds
+	u16 START_LO_US;			// Start_LO spacing in microseconds
 } IR_Sender_t;
 
 void fun_irSender_asyncSend(IR_Sender_t *model, u8 *data, u16 len) {
@@ -100,9 +104,13 @@ void fun_irSender_asyncSend(IR_Sender_t *model, u8 *data, u16 len) {
 	model->BUFFER = data;
 	model->BUFFER_LEN = len;
 
-	if (model->LOGICAL_1_US < 250 || model->LOGICAL_0_US < 250) {
+	if (model->LOGICAL_1_US < 250 || model->LOGICAL_0_US < 250 ||
+		model->START_HI_US < 2000 || model->START_LO_US < 2000
+	) {
 		model->LOGICAL_1_US = NEC_LOGICAL_1_US;
 		model->LOGICAL_0_US = NEC_LOGICAL_0_US;
+		model->START_HI_US = NEC_START_HI_US;
+		model->START_LO_US = NEC_START_LO_US;
 	}
 }
 
@@ -133,13 +141,13 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 				model->remaining_data_bits--;
 				model->logical_spacing = bit ? model->LOGICAL_1_US : model->LOGICAL_0_US;
 
-				// NEC protocol uses the PWM's OFF state spacing for LOGICAL value
+				//! NEC protocol uses the PWM's OFF state spacing for LOGICAL value
 				if (model->LOGICAL_1_US == NEC_LOGICAL_1_US) {
 					PWM_ON();
 					Delay_Us(model->LOGICAL_0_US);
 					PWM_OFF();
 				}
-				// Custom protocol uses any of the PWM states for LOGICAL value
+				//! Custom protocol uses any of the PWM states for LOGICAL value
 				else {
 					if (model->logic_output == 0) {
 						PWM_ON();
@@ -176,9 +184,8 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			break;
 		
 		case IR_Start_Pulse_Burst:
-			// send the Start_Pulses - 9000us
-			if (elapsed > 9000) {
-				//# end start_pulse
+			//# end the Start_Pulses - 9000us (for NEC)
+			if (elapsed > model->START_HI_US) {
 				PWM_OFF();
 				model->state = IR_Start_Pulse_Space;
 				model->time_ref = micros();
@@ -186,8 +193,8 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			break;
 
 		case IR_Start_Pulse_Space:
-			//# STEP 2: wait for start_pulse space - 4500us
-			if (elapsed > 4500) {
+			//# STEP 2: wait for start_pulse space - 4500us (for NEC)
+			if (elapsed > model->START_LO_US) {
 				model->state = IR_Data_Pulse;
 				model->time_ref = micros();
 				
