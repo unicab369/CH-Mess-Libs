@@ -39,73 +39,96 @@ void onHandle_Button(Button_Event_e event, u32 time) {
 #define IR_RECEIVE_MAX_LEN 64
 u16 IR_RECEIVE_BUF[IR_RECEIVE_MAX_LEN] = {0};
 
-//# IR Receiver Callback
-void onHandle_irReceiver(u16 *words, u16 len) {
-	// printf("\n\nReceived Buffer Len %d\n", len);
-	// s16 limit = len > MAX_WORDS_LEN ? MAX_WORDS_LEN : len;
-	// s16 line_offset = (limit / 8) - IR_RECEIVER_LINE_LOG;
-	// u8 start = line_offset > 0 ? line_offset * 8 : 0;
-
-	// if (start > 0) printf("... Skipping %d lines ...\n", line_offset);
-
-	// for (int i = start; i < limit; i++) {
-	// 	printf("0x%04X  ", words[i]);
-	// 	if (i%8 == 7) printf("\n");			// separator
-	// }
-}
 
 //! ####################################
 //! MAIN FUNCTION
 //! ####################################
 
-void _IR_carrier_pulse(u32 duration_us) {
-	// the pulse has duration the same as NEC_LOGIC_0_WIDTH_US
-	//# Start CH1N output
-	PWM_ON();
-	Delay_Us(duration_us);
+// void _IR_carrier_pulse(u32 duration_us) {
+// 	// the pulse has duration the same as NEC_LOGIC_0_WIDTH_US
+// 	//# Start CH1N output
+// 	PWM_ON();
+// 	Delay_Us(duration_us);
 
-	//# Stop CH1N output
-	PWM_OFF();
-}
+// 	//# Stop CH1N output
+// 	PWM_OFF();
+// }
 
-#define NfS_LOGIC_1_WIDTH_US 550
-#define NfS_LOGIC_0_WIDTH_US 300
+// #define NfS_LOGIC_1_WIDTH_US 550
+// #define NfS_LOGIC_0_WIDTH_US 300
 
-void _irSend_CustomTestData() {
-	static u8 state = 0;
-	_IR_carrier_pulse(3000);
-	Delay_Us(3000);
+// void _irSend_CustomTestData() {
+// 	static u8 state = 0;
+// 	_IR_carrier_pulse(3000);
+// 	Delay_Us(3000);
 
-	u16 data = 0x0000;
+// 	u16 data = 0x0000;
 
-	// loop through the data
-	for (int i = 0; i < 150; i++) {
-		// loop through the bits
-		for (int i = 15; i >= 0; i--)  {
-			u8 bit = (data >> i) & 1;        // MSB first
-			u32 space = bit ? NfS_LOGIC_1_WIDTH_US : NfS_LOGIC_0_WIDTH_US;
+// 	// loop through the data
+// 	for (int i = 0; i < 150; i++) {
+// 		// loop through the bits
+// 		for (int i = 15; i >= 0; i--)  {
+// 			u8 bit = (data >> i) & 1;        // MSB first
+// 			u32 space = bit ? NfS_LOGIC_1_WIDTH_US : NfS_LOGIC_0_WIDTH_US;
 
-			//! Custom protocol does not need a signal pulse
-			//! it uses any of the GPIO states spacing LOGICAL value
-			if (state == 0) {
-				_IR_carrier_pulse(space);
-			} else {
-				Delay_Us(space);
-			}
+// 			//! Custom protocol does not need a signal pulse
+// 			//! it uses any of the GPIO states spacing LOGICAL value
+// 			if (state == 0) {
+// 				_IR_carrier_pulse(space);
+// 			} else {
+// 				Delay_Us(space);
+// 			}
 			
-			state = !state;
-		}
+// 			state = !state;
+// 		}
 
-		data++;
-	}
+// 		data++;
+// 	}
 
-	// terminating signals
-	_IR_carrier_pulse(NfS_LOGIC_0_WIDTH_US);
-}
+// 	// terminating signals
+// 	_IR_carrier_pulse(NfS_LOGIC_0_WIDTH_US);
+// }
 
+
+//# IR Receiver Callback
 void onHandle_irString(const char* str) {
 	printf("\nIR Received String: %s\n", str);
 	memcpy(IR_Receive_Str, str, SSD1306_MAX_STR_LEN);
+}
+
+void onHandle_irData(u8 *data, u16 len) {
+	if (len > 3 && data[0] == 'S' && data[1] == 'T' && data[2] == 'R') {
+		printf("\nIR Received: %s\n", (const char*)(data + 3));
+		memcpy(IR_Receive_Str, data + 4, SSD1306_MAX_STR_LEN);
+		return;		
+	}
+
+	if (len > 3 && data[0] == 'S' && data[1] == 'E' && data[2] == '1') {
+		printf("\nIR Received: %s\n", (const char*)(data + 4));
+		memcpy(IR_Receive_Str, data + 4, SSD1306_MAX_STR_LEN);
+		return;		
+	}
+
+	if (len > 3 && data[0] == 'E' && data[1] == 'R' && data[2] == 'R') {
+		printf("\nIR Received: %s\n", (const char*)(data + 4));
+		memcpy(IR_Receive_Str, data + 4, SSD1306_MAX_STR_LEN);
+		return;		
+	}
+
+	printf("\n\nReceived Buffer Len %d\n", len);
+	sprintf(IR_Receive_Str, "Received Buffer Len %d", len);
+
+	s16 limit = len > IR_RECEIVE_MAX_LEN ? IR_RECEIVE_MAX_LEN : len;
+	s16 line_offset = (limit / 8) - IR_RECEIVER_LINE_LOG;
+	u8 start = line_offset > 0 ? line_offset * 8 : 0;
+
+	if (start > 0) printf("... Skipping %d lines ...\n", line_offset);
+
+	for (int i = start; i < limit; i++) {
+		printf("%02X  ", data[i]);
+		// printf("0x%02X  ", data[i]);
+		if (i%8 == 7) printf("\n");			// separator
+	}
 }
 
 int main() {
@@ -155,8 +178,8 @@ int main() {
 		.LOGICAL_1_US = 550,
 		.LOGICAL_0_US = 300,
 		.START_SIGNAL_THRESHOLD_US = 1000,
-		// .onHandle_data = onHandle_irData,
-		.onHandle_string = onHandle_irString
+		.onHandle_data = onHandle_irData,
+		// .onHandle_string = onHandle_irString
 	};
 
 	fun_irReceiver_init(&receiver);
@@ -189,7 +212,7 @@ int main() {
 				switch (menu_selectedIdx) {
 					case 2: {
 						printf("Sending Ir message\n");
-						sprintf(str_out, "ST Hello Bee %ld", counter++);
+						sprintf(str_out, "STR Hello Bee %ld", counter++);
 						fun_irSender_asyncSend(&irSender, str_out, strlen(str_out));
 						// _irSend_CustomTestData();
 						break;

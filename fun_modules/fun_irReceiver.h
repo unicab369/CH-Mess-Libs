@@ -68,7 +68,6 @@ typedef struct {
 	u16 LOGICAL_0_US;					// LOGICAL_0 in microseconds
 	u16 START_SIGNAL_THRESHOLD_US;		// START_SIGNAL_THRESHOLD in microseconds
 	void (*onHandle_data)(u8*, u16);
-	void (*onHandle_string)(const char* str);
 } IR_Receiver_t;
 
 Cycle_Info_t ir_cycle;
@@ -100,14 +99,7 @@ void fun_irReceiver_init(IR_Receiver_t* model) {
 void _irReceiver_processBuffer(IR_Receiver_t *model) {
 	//! make callback
 	if (model->byte_idx > 0) {
-		if (model->byte_idx > 3 && model->onHandle_string &&
-			model->RECEIVE_BUF[0] == 'S' && 
-			model->RECEIVE_BUF[1] == 'T' &&
-			model->RECEIVE_BUF[2] == ' '
-		) {
-			model->onHandle_string((const char*)(model->RECEIVE_BUF + 3));
-		}
-		else if (model->onHandle_data) {
+		if (model->onHandle_data) {
 			model->onHandle_data(model->RECEIVE_BUF, model->byte_idx);
 		}
 	}

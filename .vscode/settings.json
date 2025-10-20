@@ -25,7 +25,8 @@
         "lut_sin.h": "c",
         "luts.h": "c",
         "util_luts.h": "c",
-        "util_sine.h": "c"
+        "util_sine.h": "c",
+        "fun_clockfreq.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

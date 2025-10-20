@@ -19,19 +19,19 @@
 #include <stdio.h>
 
 typedef enum {
-	CLOCK_48Mhz,		// 6.75 mA
-	CLOCK_24Mhz,		// about the same as 48Mhz ???
-	CLOCK_12Mhz,		// 4.75 mA
-	CLOCK_8Mhz,			// 4.25 mA
-	CLOCK_6Mhz,			// 3.75 mA
-	CLOCK_4P8Mhz,		// 3.45 mA
-	CLOCK_4Mhz,			// 3.25 mA
-	CLOCK_3P4Mhz,		// 3.10 mA
-	CLOCK_3Mhz,			// 3.00 mA
-	CLOCK_1P5Mhz,		// 2.65 mA
-	CLOCK_750Khz,		// 2.50 mA
+	CLOCK_48Mhz,		// 5.8 mA
+	CLOCK_24Mhz,		// 5.65 mA
+	CLOCK_12Mhz,		// 4.95 mA
+	CLOCK_8Mhz,			// 3.20 mA
+	CLOCK_6Mhz,			// 2.70 mA
+	CLOCK_4P8Mhz,		// 2.40 mA
+	CLOCK_4Mhz,			// 2.20 mA
+	CLOCK_3P4Mhz,		// 2.00 mA
+	CLOCK_3Mhz,			// 1.95 mA
+	CLOCK_1P5Mhz,		//
+	CLOCK_750Khz,		//
 	CLOCK_375Khz,		//! 1.90 mA NOTE: Bricks device. unbrick with .\minichlink.exe -u
-	CLOCK_185Khz,
+	CLOCK_185Khz,		// 1.15 mA
 } Clock_Frequency_t;
 
 void fun_clockfreq_set(Clock_Frequency_t freq) {

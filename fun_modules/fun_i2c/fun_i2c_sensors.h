@@ -39,18 +39,30 @@ i2c_device_t dev_sensor = {
 
 u8 I2C_DATA_BUF[8];
 
-void test_bh1750(u16 *lux) {
+i2c_err_t test_bh1750(u16 *lux) {
 	dev_sensor.addr = 0x23;
 
 	if (i2c_ping(dev_sensor.addr) != I2C_OK) {
 		printf("BH1750 not found\n");
-		return;
+		return I2C_ERR_BERR;
 	}
 
+	//# Power ON
 	i2c_err_t ret = i2c_write_raw(&dev_sensor, (u8[]){0x01}, 1);
+	if (ret != I2C_OK) { return ret; }
 
-	// One-time H-resolution mode
-	ret = i2c_read_reg(&dev_sensor, 0x20, I2C_DATA_BUF, 2);
+	// Continuous H-Resolution mode 	0x10 1lx resolution 	- 120ms
+	// Continuous H-Resolution mode2 	0x11 0l5lx resolution 	- 120ms
+	// Continuous L-Resolution mode 	0x13 4lx resolution 	- 16ms
+	// One-time H-Resolution mode		0x20 1lx resolution 	- 120ms
+	// One-time H-Resolution mode2 		0x21 0.5lx resolution 	- 120ms
+	// One-time L-Resolution mode		0x23 4lx resolution 	- 16ms
+	ret = i2c_write_raw(&dev_sensor, (u8[]){0x23}, 1);
+	if (ret != I2C_OK) { return ret; }
+	Delay_Ms(20);	//! REQUIRED
+
+	ret = i2c_read_reg(&dev_sensor, 0x13, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
 
 	u16 lux_raw = BUF_MAKE_U16(I2C_DATA_BUF);
 	*lux = lux_raw * 12 / 10;
@@ -60,24 +72,26 @@ void test_bh1750(u16 *lux) {
 	#endif
 }
 
-void test_sht3x(u16 *tempF, u16 *hum) {
+i2c_err_t test_sht3x(u16 *tempF, u16 *hum) {
 	dev_sensor.addr = 0x44;
 
 	if (i2c_ping(dev_sensor.addr) != I2C_OK) {
 		printf("SHT3X not found\n");
-		return;
+		return I2C_ERR_BERR;
 	}
 
-	// Soft reset
-	i2c_err_t ret = i2c_write_reg(&dev_sensor, 0x30, (u8[]){0xA2}, 1);
-	// ret = i2c_write_raw(&dev_sensor, (u8[]){0x30, 0xA2}, 2);
-	Delay_Ms(20);	//! REQUIRED
+	// Soft reset - will always return busy
+	i2c_err_t ret = i2c_write_raw(&dev_sensor, (u8[]){ 0x30, 0xA2}, 2);
+	Delay_Ms(5);	//! REQUIRED
 	
 	// High repeatability, 1 update per second
 	ret = i2c_write_raw(&dev_sensor, (u8[]){0x21, 0x30}, 2);
-	Delay_Ms(20);	//! REQUIRED
+	if (ret != I2C_OK) { return ret; }
+	Delay_Ms(5);	//! REQUIRED
 
 	ret = i2c_read_raw(&dev_sensor, I2C_DATA_BUF, 6);
+	if (ret != I2C_OK) { return ret; }
+
 	u16 temp_raw = BUF_MAKE_U16(I2C_DATA_BUF);
 	u16 hum_raw = (I2C_DATA_BUF[3] << 8) | I2C_DATA_BUF[4];
 	*tempF = (175 * temp_raw) >> 16;		// >> 16 is equivalent to / 65536
@@ -86,6 +100,8 @@ void test_sht3x(u16 *tempF, u16 *hum) {
 	#ifdef I2C_SENSORS_DEBUG_LOG
 		printf("\nSHT3X temp: %d, hum: %d\n", *tempF, *hum);
 	#endif
+
+	return ret;
 }
 
 
@@ -167,10 +183,9 @@ void ina219_config_binary(u16 config) {
 
 u8 INA219_CONFIGURED = 0;
 
-void ina219_configure(u16 max_current_ma, u16 shunt_resistor_mohm) {
+i2c_err_t ina219_configure(u16 max_current_ma, u16 shunt_resistor_mohm) {
 	if (INA219_CONFIGURED == 1) return;
 
-	i2c_err_t ret;
 	//# Configure INA219
 	u16 config = (0 << 13) |	// 16V range
 				 (0 << 11) |	// +-40 mV
@@ -180,9 +195,12 @@ void ina219_configure(u16 max_current_ma, u16 shunt_resistor_mohm) {
 	u8 config_bytes[2] = {config >> 8, config & 0xFF};
 	// ina219_config_binary(config);
 
-	ret = i2c_write_reg(&dev_sensor, 0x00, config_bytes, 2);
+	i2c_err_t ret = i2c_write_reg(&dev_sensor, 0x00, config_bytes, 2);
+	if (ret != I2C_OK) { return ret; }
 
-	i2c_read_reg(&dev_sensor, INA219_REG_CONFIG, I2C_DATA_BUF, 2);
+	ret = i2c_read_reg(&dev_sensor, INA219_REG_CONFIG, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
+
 	u16 config_read = BUF_MAKE_U16(I2C_DATA_BUF);
 	// printf("config: 0x%04X\n", config);
 	// printf("\nConfig register: 0x%04X\n", config_read);
@@ -202,7 +220,8 @@ void ina219_configure(u16 max_current_ma, u16 shunt_resistor_mohm) {
 	i2c_write_reg(&dev_sensor, INA219_REG_CALIB, cal_bytes, 2);
 	// Delay_Ms(1);
 
-	i2c_read_reg(&dev_sensor, INA219_REG_CALIB, I2C_DATA_BUF, 2);
+	ret = i2c_read_reg(&dev_sensor, INA219_REG_CALIB, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
 	u16 cal_read = BUF_MAKE_U16(I2C_DATA_BUF);
 
 	// printf("\nCalibration value: %ld\n", cal);
@@ -211,15 +230,15 @@ void ina219_configure(u16 max_current_ma, u16 shunt_resistor_mohm) {
 	INA219_CONFIGURED = 1;
 }
 
-void test_ina219(u16 *shunt_uV, u16 *bus_mV, u16 *current_uA, u16 *power_uW) {
+i2c_err_t test_ina219(u16 *shunt_uV, u16 *bus_mV, u16 *current_uA, u16 *power_uW) {
 	dev_sensor.addr = 0x40;
 
 	if (i2c_ping(dev_sensor.addr) != I2C_OK) {
 		printf("INA219 not found\n");
-		return;
+		return I2C_ERR_BERR;
 	}
 
-	i2c_err_t ret;
+	
 
 	//# configure and calibrate
 	// max_cal <= 0xFFFF, solve for usuable max_current & shunt
@@ -227,26 +246,31 @@ void test_ina219(u16 *shunt_uV, u16 *bus_mV, u16 *current_uA, u16 *power_uW) {
 	// max_current_mA * shunt_mOhm has to be greater than 20480 for a valid calibration value
 	// if shunt_mOhm = 100 mOhm, max_current_mA has to be at least 200 (300 recommended bc of rounding errors)
 	u16 MAX_CURRENT_MA = 300;
-	ina219_configure(MAX_CURRENT_MA, 140);
+	i2c_err_t ret = ina219_configure(MAX_CURRENT_MA, 140);
+	if (ret != I2C_OK) { return ret; }
 
 	//# Read shunt voltage
 	ret = i2c_read_reg(&dev_sensor, INA219_REG_SHUNT, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
 	u16 shunt_raw = BUF_MAKE_U16(I2C_DATA_BUF);
 	*shunt_uV = shunt_raw * 10;	
 
 	//# Read bus voltage
 	ret = i2c_read_reg(&dev_sensor, INA219_REG_BUS, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
 	u16 bus_raw = BUF_MAKE_U16(I2C_DATA_BUF);
 	*bus_mV = (bus_raw >> 3) * 4;
 
 	//# Read power
 	ret = i2c_read_reg(&dev_sensor, INA219_REG_POWER, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
 	// power_LSB = 20 * current_LSB = 20 * max_current/32768
 	u16 power_raw = BUF_MAKE_U16(I2C_DATA_BUF);
 	*power_uW = 20 * power_raw * 1000 * MAX_CURRENT_MA / 32768;
 
 	//# Read current
 	ret = i2c_read_reg(&dev_sensor, INA219_REG_CURRENT, I2C_DATA_BUF, 2);
+	if (ret != I2C_OK) { return ret; }
 	// current_LSB = max_current/32768
 	// current_mA = current_raw * current_LSB
 	u16 current_raw = BUF_MAKE_U16(I2C_DATA_BUF);

@@ -207,3 +207,67 @@ void fun_irSender_asyncTask(IR_Sender_t *model) {
 			break;
 	}
 }
+
+
+//! ####################################
+//! BLOCKING TRANSMIT FUNCTIONS
+//! ####################################
+
+#define IR_USE_TIM1_PWM
+
+//* CARRIER PULSE (BLOCKING)
+void _IR_carrier_pulse(u32 duration_us) {
+	// the pulse has duration the same as NEC_LOGIC_0_WIDTH_US
+	#ifdef IR_USE_TIM1_PWM
+		//# Start CH1N output
+		PWM_ON();
+		Delay_Us(duration_us);
+
+		//# Stop CH1N output
+		PWM_OFF();
+	#else
+		u16 carrier_cycles = duration_us / (IR_CARRIER_HALF_PERIOD_US * 2);
+
+		for(u32 i = 0; i < carrier_cycles; i++) {
+			funDigitalWrite(irSender_pin, 1);  	// Set high
+			Delay_Us( IR_CARRIER_HALF_PERIOD_US );
+			funDigitalWrite(irSender_pin, 0);   // Set low
+			Delay_Us( IR_CARRIER_HALF_PERIOD_US );
+		}
+
+		// Ensure pin is low during space
+		funDigitalWrite(irSender_pin, 0);
+	#endif
+}
+
+void _IR_send_custom_Byte(IR_Sender_t *model, u8 data) {
+	static u8 state = 0;
+
+	// loop through the bits
+	for (int i = 7; i >= 0; i--)  {
+		u8 bit = (data >> i) & 1;        // MSB first
+		u32 space = bit ? model->LOGICAL_1_US : model->LOGICAL_0_US;
+
+		//! Custom protocol does not need a signal pulse
+		//! it uses any of the GPIO states spacing LOGICAL value
+		if (state == 0) {
+			_IR_carrier_pulse(space);
+		} else {
+			Delay_Us(space);
+		}
+		
+		state = !state;
+	}
+}
+
+void fun_irSender_blockingTask(IR_Sender_t *model, u8 *data, u16 len) {
+	_IR_carrier_pulse(1600);
+	Delay_Us(1600);
+
+	for (int i = 0; i < len; i++) {
+		_IR_send_custom_Byte(model, data[i]);
+	}
+
+	// terminating signals
+	_IR_carrier_pulse(model->LOGICAL_0_US);
+}
