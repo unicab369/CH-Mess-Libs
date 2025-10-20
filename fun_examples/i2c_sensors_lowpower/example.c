@@ -144,8 +144,7 @@ int main() {
 			memcpy(str_output, "ERR I2C init failed", 40);
 		}
 
-		fun_irSender_blockingTask(&irSender, str_output, strlen(str_output));
-		Delay_Ms(100);
+		fun_irSender_blockingTask(&irSender, str_output, 24);
 		funDigitalWrite(PC0, 0);
 
 		// printf("\r\nawake, %u\r\n", counter++);
