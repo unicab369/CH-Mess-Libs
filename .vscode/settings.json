@@ -26,7 +26,8 @@
         "luts.h": "c",
         "util_luts.h": "c",
         "util_sine.h": "c",
-        "fun_clockfreq.h": "c"
+        "fun_clockfreq.h": "c",
+        "ch32v003_flash.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
