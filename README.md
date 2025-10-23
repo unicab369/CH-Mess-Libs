@@ -10,3 +10,8 @@ last resort
 3, If you don't see a link device showing up, go to the device manager, right click on the LinkE an do `Update` or `Update Driver`
 4, Try to click Refresh again. Next click on the Get button right bellow the Refresh button
 5, Next, on the top left menu, select `Target` and select `Clear All Code Flash by Power Off` 
+
+
+# flashing via USB
+
+..\..\minichlink\minichlink -c 0x1209b803 -w blink.bin flash -b
