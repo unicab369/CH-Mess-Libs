@@ -84,7 +84,7 @@ void sleep_init() {
 	PFIC->SCTLR |= (1 << 2);
 }
 
-#define SLEEP_MODE_ENABLE
+// #define SLEEP_MODE_ENABLE
 
 static u8 str_output[40] = { 0 };
 
@@ -169,13 +169,18 @@ int main() {
 	if(i2c_init(&dev_i2c) != I2C_OK) {
 		printf("Err: I2C init failed\n");
 	} else {
-		i2c_start_scan();
+		// i2c_start_scan();
+
+		// u16 lux;
+		// test_bh1750(&lux);
+		// sprintf(str_output, "LUX %d", lux);
+		// printf("%s\n", str_output);
 	}
 
 	while(1) {
 		u32 moment = millis();
 
-		if (moment - time_ref > 1000) {
+		if (moment - time_ref > 2000) {
 			time_ref = moment;
 
 			u16 lux;
@@ -183,23 +188,23 @@ int main() {
 			sprintf(str_output, "LUX %d", lux);
 			printf("%s\n", str_output);
 
-			u16 tempF, hum;
-			test_sht3x(&tempF, &hum);
-			sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
-			printf("%s\n", str_output);
+			// u16 tempF, hum;
+			// test_sht3x(&tempF, &hum);
+			// sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
+			// printf("%s\n", str_output);
 
-			u16 shunt_mV, bus_mV, current_uA, power_uW;
-			test_ina219(&shunt_mV, &bus_mV, &current_uA, &power_uW);
-			sprintf(str_output, "SHUNT %d uV", shunt_mV);
-			printf("%s\n", str_output);
+			// u16 shunt_mV, bus_mV, current_uA, power_uW;
+			// test_ina219(&shunt_mV, &bus_mV, &current_uA, &power_uW);
+			// sprintf(str_output, "SHUNT %d uV", shunt_mV);
+			// printf("%s\n", str_output);
 
-			sprintf(str_output, "BUS %d mV", bus_mV);
-			printf("%s\n", str_output);
+			// sprintf(str_output, "BUS %d mV", bus_mV);
+			// printf("%s\n", str_output);
 
-			sprintf(str_output, "%d uA, %d uW", current_uA, power_uW);
-			printf("%s\n", str_output);	
+			// sprintf(str_output, "%d uA, %d uW", current_uA, power_uW);
+			// printf("%s\n", str_output);	
 
-			printf("\n");
+			// printf("\n");
 		}
 	}
 }
