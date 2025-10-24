@@ -13,16 +13,20 @@
 
 #define I2C_TIMEOUT 100000
 
-#define I2C_WAIT_FOR(condition) do { \
-    u32 timeout = 100000; \
+// return 1 = Success, 0 = Timeout
+#define I2C_WAIT_FOR(condition) ({ \
+    u32 timeout = I2C_TIMEOUT; \
+    u8 result = 0; \
     while (!(condition)) { \
         if (--timeout == 0) { \
-            debug_i2c_registers(); \
             R16_I2C_CTRL1 |= RB_I2C_STOP; \
+            result = 0; \
             break; \
         } \
     } \
-} while(0)
+    if (timeout > 0) result = 1; \
+    result; \
+})
 
 
 void print_bits(u16 val) {
@@ -42,7 +46,7 @@ void print_bits(u16 val) {
 // I2C_STAR2
 // [2] TRA, [1] BUSY, [0] MSL
 
-void debug_i2c_registers(void) {
+void i2c_debug_print(void) {
 	printf("CTRL1:  0x%04X \t", R16_I2C_CTRL1);		print_bits(R16_I2C_CTRL1); printf("\r\n");
 	printf("CTRL2:  0x%04X \t", R16_I2C_CTRL2);		print_bits(R16_I2C_CTRL2); printf("\r\n");
 	printf("STAR1:  0x%04X \t", R16_I2C_STAR1); 	print_bits(R16_I2C_STAR1); printf("\r\n");
@@ -112,16 +116,10 @@ u8 i2c_START(u8 address, u8 addr_mask) {
     R16_I2C_CTRL1 |= RB_I2C_START;
     
     //# STEP 2: Wait for SB with timeout
-    u32 timeout = 100000;
-    while (!(R16_I2C_STAR1 & RB_I2C_SB)) {
-        if (--timeout == 0) {
-            printf("ERROR: SB timeout\r\n");
-			debug_i2c_registers();
-            R16_I2C_CTRL1 |= RB_I2C_STOP;  	// Clean up
-            return 1;
-        }
-    }
-    
+	I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_SB);
+	u8 ret = i2c_get_error();
+	if (ret != 0) return 0x10 | ret;
+
     //# STEP 3: Clear SB (READ STAR1 then write DATAR)
     volatile u16 status = R16_I2C_STAR1;  	// Read to clear SB
 
@@ -133,21 +131,9 @@ u8 i2c_START(u8 address, u8 addr_mask) {
 	}
     
     //# STEP 4: Wait for ADDR with timeout
-    timeout = 100000;
-    while (!(R16_I2C_STAR1 & RB_I2C_ADDR)) {
-        if (--timeout == 0) {
-            printf("ERROR: ADDR timeout\r\n");
-			debug_i2c_registers();
-            R16_I2C_CTRL1 |= RB_I2C_STOP;
-            return 2;
-        }
-
-		// // Check for NACK
-        // if (R16_I2C_STAR1 & RB_I2C_AF) {
-        //     R16_I2C_CTRL1 |= RB_I2C_STOP;
-        //     return 3;
-        // }
-    }
+	I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_ADDR);
+	ret = i2c_get_error();
+	if (ret != 0) return 0x20 | ret;
 
     //# STEP 5: Clear ADDR by reading registers
     status = R16_I2C_STAR1;
@@ -157,8 +143,8 @@ u8 i2c_START(u8 address, u8 addr_mask) {
 }
 
 u8 i2c_ping(u8 address) {
-	u8 check = i2c_START(address, I2C_ADDR_WRITE_MASK);
-	if (check != 0) return check;
+	u8 ret = i2c_START(address, I2C_ADDR_WRITE_MASK);
+	if (ret != 0) return ret;
 
 	//# STOP I2C
 	R16_I2C_CTRL1 |= RB_I2C_STOP;
@@ -166,36 +152,21 @@ u8 i2c_ping(u8 address) {
 }
 
 u8 i2c_writeData(u8 address, u8 *data, u8 len, u8 stop_when_done) {
-	uint32_t timeout;
-	u8 check = i2c_START(address, I2C_ADDR_WRITE_MASK);
-	if (check != 0) return check;
+	//# STEP 1: Send Start
+	u8 ret = i2c_START(address, I2C_ADDR_WRITE_MASK);
+	if (ret != 0) return ret;
 
 	for (u8 i = 0; i < len; i++) {
-		timeout = 100000;
-
-		while (!(R16_I2C_STAR1 & RB_I2C_TxE)) {
-			if(--timeout < 1) {
-				printf("ERROR: TXE timeout\r\n");
-				debug_i2c_registers();
-				R16_I2C_CTRL1 |= RB_I2C_STOP;
-				return 4;
-			}
-		}
+		u8 check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_TxE);
+		if (!check) return 0x30 | i2c_get_error();
 		R16_I2C_DATAR = data[i];
 	}
 
-	// Wait for BTF (Byte Transfer Finished) - all data shifted out
-	timeout = 100000;
-	while (!(R16_I2C_STAR1 & RB_I2C_BTF)) {
-		if(--timeout < 1) {
-			printf("ERROR: BTF timeout\r\n");
-			debug_i2c_registers();
-			R16_I2C_CTRL1 |= RB_I2C_STOP;
-			return 5; // BTF timeout
-		}
-	}
+	//# STEP 2: Wait for BTF (Byte Transfer Finished) - all data shifted out
+	u8 check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_BTF);
+	if (!check) return 0x40 | i2c_get_error();
 
-	// Clear BTF: Read STAR1
+	//# STEP 3: Clear BTF - Read STAR1
 	volatile u16 status = R16_I2C_STAR1;
 
 	if (stop_when_done == 1) {
@@ -208,11 +179,9 @@ u8 i2c_writeData(u8 address, u8 *data, u8 len, u8 stop_when_done) {
 
 
 u8 i2c_readData(u8 address, u8 *data, u8 len) {
-	uint32_t timeout;
+	//# STEP 1: Send Start
 	u8 check = i2c_START(address, I2C_ADDR_READ_MASK);
 	if (check != 0) return check;
-
-	volatile uint16_t status;
 
 	// Configure ACK for multi-byte read
 	if(len > 1) {
@@ -230,28 +199,21 @@ u8 i2c_readData(u8 address, u8 *data, u8 len) {
 			R16_I2C_CTRL1 &= ~RB_I2C_ACK;
 		}
 
-		// Wait for RxNE (Receive Data Register Not Empty)
-		timeout = 100000;
-		while (!(R16_I2C_STAR1 & RB_I2C_RxNE)) {
-			if(--timeout < 1) {
-				printf("ERROR: RXNE timeout\r\n");
-				debug_i2c_registers();
-				R16_I2C_CTRL1 |= RB_I2C_STOP;
-				return 6; // RX timeout
-			}
-		}
-
+		//# STEP 2: Wait for RxNE (Receive Data Register Not Empty)
+		u8 check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_RxNE);
+		if (!check) return 0x50 | i2c_get_error();
+		
 		// Read data byte
 		data[i] = R16_I2C_DATAR;
 
-		// Check for BTF and clear if needed
+		//# STEP 3: Check for BTF and clear if needed
 		if (R16_I2C_STAR1 & RB_I2C_BTF) {
-			status = R16_I2C_STAR1;
+			volatile uint16_t status = R16_I2C_STAR1;
 			data[i] = R16_I2C_DATAR; // Read again to clear BTF
 		}
 	}
 
-	//# STOP I2C
+	//# STEP 4: STOP I2C
 	R16_I2C_CTRL1 |= RB_I2C_STOP;
 	return i2c_get_error();
 
@@ -266,22 +228,36 @@ void read_bh1750() {
 
 	//# power on
 	u8 ret = i2c_writeData(address, (u8[]){0x01}, 1, 1);
-	printf("I2C powerON: %d\r\n", ret);
+	if (ret != 0) {
+		printf("\nERROR: I2C powerON 0x%02X\r\n", ret);
+		i2c_debug_print();
+		return;
+	}
 
-	Delay_Ms(50);
-	
 	//# set resolution
 	ret = i2c_writeData(address, (u8[]){0x23}, 1, 1);
-	printf("I2C config: %d\r\n", ret);
+	if (ret != 0) {
+		printf("\nERROR: I2C resolution 0x%02X\r\n", ret);
+		i2c_debug_print();
+		return;
+	}
 
 	//# request reading
 	ret = i2c_writeData(address, (u8[]){0x13}, 1, 1);
-	printf("I2C request: %d\r\n", ret);
+	if (ret != 0) {
+		printf("\nERROR: I2C request 0x%02X\r\n", ret);
+		i2c_debug_print();
+		return;
+	}
 
 	//# parse reading
 	u8 data[2];
 	ret = i2c_readData(address, data, 2);
-	printf("I2C reading: %d\r\n", ret);
+	if (ret != 0) {
+		printf("\nERROR: I2C reading 0x%02X\r\n", ret);
+		i2c_debug_print();
+		return;
+	}
 
 	u16 lux_raw = BUF_MAKE_U16(data);
 	u16 lux = lux_raw * 12 / 10;
@@ -298,20 +274,12 @@ int main() {
 	funPinMode( PIN_KEVIN, GPIO_CFGLR_OUT_10Mhz_PP ); // Set PIN_KEVIN to output
 
 	u8 err = i2c_init(100);
-	printf("\n*****I2C init: %d\r\n", err);
+	printf("\nI2C init: %d\r\n", err);
 
 	u8 status = i2c_ping(0x23);
-	printf("I2C status: %d\r\n", status);
-
-	Delay_Ms(50);
-
-	// u8 data[2];
-	// status = i2c_readData(0x23, data, 2);
-	// printf("I2C status2: %d\r\n", status);
-	// printf("I2C data: %d\r\n", BUF_MAKE_U16(data));
+	printf("I2C ping: %d\r\n", status);
 
 	u8 state = 0;
-	
 	// u32 time_ref = millis();
 
 	while(1) {
@@ -323,7 +291,6 @@ int main() {
 		Delay_Ms( 500 );
 
 		read_bh1750();
-
 
 		// u32 moment = millis();
 
