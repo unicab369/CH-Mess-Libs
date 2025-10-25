@@ -188,10 +188,10 @@ int main() {
 			sprintf(str_output, "LUX %d", lux);
 			printf("%s\n", str_output);
 
-			// u16 tempF, hum;
-			// test_sht3x(&tempF, &hum);
-			// sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
-			// printf("%s\n", str_output);
+			u16 tempF, hum;
+			test_sht3x(&tempF, &hum);
+			sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
+			printf("%s\n", str_output);
 
 			// u16 shunt_mV, bus_mV, current_uA, power_uW;
 			// test_ina219(&shunt_mV, &bus_mV, &current_uA, &power_uW);
