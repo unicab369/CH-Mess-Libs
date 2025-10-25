@@ -1,12 +1,13 @@
 #include "ch32fun.h"
 #include <stdio.h>
+#include "../../fun_modules/systick_irq.h"
 
 #include "lib_i2c_ch5xx.h" 
 
 #define PIN_BOB PA8
 #define PIN_KEVIN PA9
 
-void read_bh1750() {
+void bh1750_setup() {
 	u8 address = 0x23;
 
 	//# power on
@@ -24,9 +25,13 @@ void read_bh1750() {
 		i2c_debug_print();
 		return;
 	}
+}
+
+void bh1750_read() {
+	u8 address = 0x23;
 
 	//# request reading
-	ret = i2c_writeData(address, (u8[]){0x13}, 1);
+	u8 ret = i2c_writeData(address, (u8[]){0x13}, 1);
 	if (ret != 0) {
 		printf("\nERROR: I2C request 0x%02X\r\n", ret);
 		i2c_debug_print();
@@ -44,16 +49,16 @@ void read_bh1750() {
 
 	u16 lux_raw = BUF_MAKE_U16(data);
 	u16 lux = lux_raw * 12 / 10;
-	printf("lux: %d\r\n", lux);
+	printf("lux: %d\r\n", lux);	
 }
 
-void read_sht3x() {
+void sht3x_setup() {
 	u8 addres = 0x44;
 
 	//# soft reset
 	u8 ret = i2c_writeData(addres, (u8[]){0x30, 0xA2}, 2);
 	// this command will alwasy be busy, don't check for error
-	Delay_Ms(15);	//! REQUIRED
+	// Delay_Ms(1);	//! REQUIRED
 
 	//# config
 	ret = i2c_writeData(addres, (u8[]){0x21, 0x30}, 2);
@@ -62,11 +67,15 @@ void read_sht3x() {
 		i2c_debug_print();
 		return;
 	}
-	Delay_Ms(15);	//! REQUIRED
+	// Delay_Ms(1);	//! REQUIRED
+}
+
+void sht3x_read() {
+	u8 addres = 0x44;
 
 	//# parse reading
 	u8 data[6];
-	ret = i2c_readData(addres, data, 6);
+	u8 ret = i2c_readData(addres, data, 6);
 	if (ret != 0) {
 		printf("\nERROR: I2C reading 0x%02X\r\n", ret);
 		i2c_debug_print();
@@ -82,7 +91,7 @@ void read_sht3x() {
 
 int main() {
 	SystemInit();
-	// systick_init();			//! REQUIRED for millis()
+	systick_init();			//! REQUIRED for millis()
 	Delay_Ms(100);
 	funGpioInitAll();
 
@@ -96,29 +105,28 @@ int main() {
 	printf("I2C ping: %d\r\n", status);
 
 	u8 state = 0;
-	// u32 time_ref = millis();
+	u32 time_ref = millis();
+
+	bh1750_setup();
+	sht3x_setup();
+
+	printf("initial readings:\r\n");
+	bh1750_read();
+	sht3x_read();
+	Delay_Ms(15);
 
 	while(1) {
-		funDigitalWrite( PIN_BOB,   FUN_HIGH ); // Turn on PIN_BOB
-		funDigitalWrite( PIN_KEVIN, FUN_HIGH ); // Turn on PIN_KEVIN
-		Delay_Ms( 500 );
-		funDigitalWrite( PIN_BOB,   FUN_LOW );  // Turn off PIN_BOB
-		funDigitalWrite( PIN_KEVIN, FUN_LOW );  // Turn off PIN_KEVIN
-		Delay_Ms( 500 );
+		u32 moment = millis();
 
-		printf("\r\n");
-		read_bh1750();
-		read_sht3x();
+		if (moment - time_ref > 1000) {
+			time_ref = moment;
+			printf("\r\n");
+			bh1750_read();
+			sht3x_read();
 
-		// u32 moment = millis();
-
-		// if (moment - time_ref > 1000) {
-		// 	time_ref = moment;
-		// 	printf("IM HERE\r\n");
-
-		// 	funDigitalWrite( PIN_BOB,   state ); // Turn on PIN_BOB
-		// 	funDigitalWrite( PIN_KEVIN, state ); // Turn on PIN_KEVIN
-		// 	state = !state;
-		// }
+			funDigitalWrite( PIN_BOB,   state ); // Turn on PIN_BOB
+			funDigitalWrite( PIN_KEVIN, state ); // Turn on PIN_KEVIN
+			state = !state;
+		}
 	}
 }
