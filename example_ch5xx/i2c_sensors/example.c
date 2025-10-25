@@ -1,8 +1,4 @@
-#include "ch32fun.h"
-#include <stdio.h>
-#include "../../fun_modules/systick_irq.h"
-
-#include "lib_i2c_ch5xx.h" 
+#include "../../fun_modules/fun_i2c/lib/lib_i2c_ch5xx.h" 
 
 #define PIN_BOB PA8
 #define PIN_KEVIN PA9
@@ -14,7 +10,7 @@ void bh1750_setup() {
 	u8 ret = i2c_writeData(address, (u8[]){0x01}, 1);
 	if (ret != 0) {
 		printf("\nERROR: I2C powerON 0x%02X\r\n", ret);
-		i2c_debug_print();
+		i2c_print_regs();
 		return;
 	}
 
@@ -22,7 +18,7 @@ void bh1750_setup() {
 	ret = i2c_writeData(address, (u8[]){0x23}, 1);
 	if (ret != 0) {
 		printf("\nERROR: I2C resolution 0x%02X\r\n", ret);
-		i2c_debug_print();
+		i2c_print_regs();
 		return;
 	}
 }
@@ -34,7 +30,7 @@ void bh1750_read() {
 	u8 ret = i2c_writeData(address, (u8[]){0x13}, 1);
 	if (ret != 0) {
 		printf("\nERROR: I2C request 0x%02X\r\n", ret);
-		i2c_debug_print();
+		i2c_print_regs();
 		return;
 	}
 
@@ -43,7 +39,7 @@ void bh1750_read() {
 	ret = i2c_readData(address, data, 2);
 	if (ret != 0) {
 		printf("\nERROR: I2C reading 0x%02X\r\n", ret);
-		i2c_debug_print();
+		i2c_print_regs();
 		return;
 	}
 
@@ -64,7 +60,7 @@ void sht3x_setup() {
 	ret = i2c_writeData(addres, (u8[]){0x21, 0x30}, 2);
 	if (ret != 0) {
 		printf("\nERROR: I2C Config 0x%02X\r\n", ret);
-		i2c_debug_print();
+		i2c_print_regs();
 		return;
 	}
 	// Delay_Ms(1);	//! REQUIRED
@@ -78,7 +74,7 @@ void sht3x_read() {
 	u8 ret = i2c_readData(addres, data, 6);
 	if (ret != 0) {
 		printf("\nERROR: I2C reading 0x%02X\r\n", ret);
-		i2c_debug_print();
+		i2c_print_regs();
 		return;
 	}
 

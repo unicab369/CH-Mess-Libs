@@ -3,9 +3,7 @@
  * i2c_error() method borrowed from https://github.com/ADBeta/CH32V003_lib_i2c
 */ 
 
-
-#include "ch32fun.h"
-#include <stdio.h>
+#include "../../fun_modules/fun_base.h"
 
 #define I2C_SDA PB12
 #define I2C_SCL PB13
@@ -16,46 +14,35 @@
 #define I2C_ADDR_WRITE_MASK 0xFE
 #define I2C_ADDR_READ_MASK 0x01
 
-#define BUF_MAKE_U16(buff) ((buff[0] << 8) | buff[1])
 
-// return 1 = Success, 0 = Timeout
-#define I2C_WAIT_FOR(condition) ({ \
-	u32 timeout = I2C_TIMEOUT; \
-	u8 result = 0; \
-	while (!(condition)) { \
-		if (--timeout == 0) { result = 0; break; } \
-	} \
-	if (timeout > 0) result = 1; \
-	result; \
-})
-
-
-void print_bits(u16 val) {
-	for (int i = 15; i >= 0; i--) { 
-		printf("%d ", (val >> i) & 1);
-		if (i == 8) printf("| ");
-	}
-}
-
-// I2C_CTRL1
+//# I2C_CTRL1
 // [15] SWRST, [10] ACK_EN, [9] STOP, [8] START, [3] SMBTYPE, [2] Reserved, [1] MSBUS, [0] PE
 
-// I2C_STAR1
+//# I2C_STAR1
 // [15] SMBALERT, [14] TIMEOUT, [13] Reserved, [12] PECERR, [11] OVR, [10] AF, [9] ARLO, 
 //[8] BEER, [7] TxE, [6] RxNE, [5] Reserved, [4] STOPF, [3] DD10, [2] BTF, [1] ADDR, [0] SB
 
-// I2C_STAR2
+//# I2C_STAR2
 // [2] TRA, [1] BUSY, [0] MSL
 
-void i2c_debug_print(void) {
-	printf("CTRL1:  0x%04X \t", R16_I2C_CTRL1);		print_bits(R16_I2C_CTRL1); printf("\r\n");
-	printf("CTRL2:  0x%04X \t", R16_I2C_CTRL2);		print_bits(R16_I2C_CTRL2); printf("\r\n");
-	printf("STAR1:  0x%04X \t", R16_I2C_STAR1); 	print_bits(R16_I2C_STAR1); printf("\r\n");
-	printf("STAR2:  0x%04X \t", R16_I2C_STAR2);		print_bits(R16_I2C_STAR2); printf("\r\n");
-	// printf("CKCFGR: 0x%04X \t", R16_I2C_CKCFGR);	print_bits(R16_I2C_CKCFGR); printf("\r\n");
-	// printf("RTR:	0x%04X \t", R16_I2C_RTR);		print_bits(R16_I2C_RTR); printf("\r\n");
-	// printf("OADDR1: 0x%04X \t", R16_I2C_OADDR1);	print_bits(R16_I2C_OADDR1); printf("\r\n");
-	printf("DATAR:  0x%04X\r\n", R16_I2C_DATAR);
+void i2c_print_regs(void) {
+	UTIL_PRINT_REG16(R16_I2C_CTRL1, "CTRL1");
+	UTIL_PRINT_REG16(R16_I2C_CTRL2, "CTRL2");
+	UTIL_PRINT_REG16(R16_I2C_STAR1, "STAR1");
+	UTIL_PRINT_REG16(R16_I2C_STAR2, "STAR2");
+	// UTIL_PRINT_REG16(R16_I2C_CKCFGR, "CKCFGR");
+	// UTIL_PRINT_REG16(R16_I2C_RTR, "RTR");
+	// UTIL_PRINT_REG16(R16_I2C_OADDR1, "OADDR1");
+	UTIL_PRINT_REG16(R16_I2C_DATAR, "DATAR");
+
+	// // printf("CTRL1: 0x%04X \t", R16_I2C_CTRL1);		UTIL_PRINT_BITS_16(R16_I2C_CTRL1); printf("\r\n");
+	// printf("CTRL2: 0x%04X \t", R16_I2C_CTRL2);		UTIL_PRINT_BITS_16(R16_I2C_CTRL2); printf("\r\n");
+	// printf("STAR1: 0x%04X \t", R16_I2C_STAR1);		UTIL_PRINT_BITS_16(R16_I2C_STAR1); printf("\r\n");
+	// printf("STAR2: 0x%04X \t", R16_I2C_STAR2);		UTIL_PRINT_BITS_16(R16_I2C_STAR2); printf("\r\n");
+	// // printf("CKCFGR: 0x%04X \t", R16_I2C_CKCFGR);	UTIL_PRINT_BITS_16(R16_I2C_CKCFGR); printf("\r\n");
+	// // printf("RTR:	0x%04X \t", R16_I2C_RTR);		UTIL_PRINT_BITS_16(R16_I2C_RTR); printf("\r\n");
+	// // printf("OADDR1: 0x%04X \t", R16_I2C_OADDR1);	UTIL_PRINT_BITS_16(R16_I2C_OADDR1); printf("\r\n");
+	// printf("DATAR: 0x%04X\r\n", R16_I2C_DATAR);
 	printf("=========================\r\n\n");
 }
 
@@ -127,7 +114,7 @@ u8 _I2C_START(u8 address, u8 addr_mask) {
 	R16_I2C_CTRL1 |= RB_I2C_START;
 	
 	//# STEP 2: Wait for SB with timeout
-	I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_SB);
+	UTIL_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_SB, I2C_TIMEOUT);
 	u8 ret = i2c_get_error();
 	if (ret != 0) {
 		R16_I2C_CTRL1 |= RB_I2C_STOP;
@@ -145,7 +132,7 @@ u8 _I2C_START(u8 address, u8 addr_mask) {
 	}
 	
 	//# STEP 4: Wait for ADDR with timeout
-	I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_ADDR);
+	UTIL_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_ADDR, I2C_TIMEOUT);
 	ret = i2c_get_error();
 	if (ret != 0) {
 		R16_I2C_CTRL1 |= RB_I2C_STOP;
@@ -178,7 +165,7 @@ u8 i2c_writeData(u8 address, u8 *data, u8 len) {
 	if (ret != 0) return ret;
 
 	for (u8 i = 0; i < len; i++) {
-		u8 check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_TxE);
+		u8 check = UTIL_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_TxE, I2C_TIMEOUT);
 		if (!check) {
 			R16_I2C_CTRL1 |= RB_I2C_STOP;
 			return 0x30 | i2c_get_error();
@@ -186,7 +173,7 @@ u8 i2c_writeData(u8 address, u8 *data, u8 len) {
 		R16_I2C_DATAR = data[i];
 
 		//# STEP 2: Wait for BTF (Byte Transfer Finished) - all data shifted out
-		check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_BTF);
+		check = UTIL_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_BTF, I2C_TIMEOUT);
 		// skip error checking to handle clock stretching devices
 		// if (!check) return 0x40 | i2c_get_error();
 	}
@@ -229,7 +216,7 @@ u8 i2c_readData(u8 address, u8 *data, u8 len) {
 		}
 
 		//# STEP 2: Wait for RxNE (Receive Data Register Not Empty)
-		u8 check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_RxNE);
+		u8 check = UTIL_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_RxNE, I2C_TIMEOUT);
 		if (!check) {
 			R16_I2C_CTRL1 |= RB_I2C_STOP;
 			return 0x50 | i2c_get_error();
