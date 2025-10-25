@@ -1,3 +1,9 @@
+/* MIT License (MIT)
+ * Copyright (c) 2025 UniTheCat
+ * i2c_error() method borrowed from https://github.com/ADBeta/CH32V003_lib_i2c
+*/ 
+
+
 #include "ch32fun.h"
 #include <stdio.h>
 
@@ -62,6 +68,11 @@ u8 i2c_get_error() {
 	return 0;
 }
 
+
+//! ####################################
+//! INIT FUNCTION
+//! ####################################
+
 u8 i2c_init(u16 i2c_speed_khz) {
 	funPinMode( I2C_SDA, GPIO_CFGLR_IN_PUPD );
 	funPinMode( I2C_SCL, GPIO_CFGLR_IN_PUPD );
@@ -106,7 +117,12 @@ u8 i2c_init(u16 i2c_speed_khz) {
 	return i2c_get_error();
 }
 
-u8 _i2c_START(u8 address, u8 addr_mask) {
+
+//! ####################################
+//! I2C START FUNCTION
+//! ####################################
+
+u8 _I2C_START(u8 address, u8 addr_mask) {
 	//# STEP 1: Generate START
 	R16_I2C_CTRL1 |= RB_I2C_START;
 	
@@ -144,16 +160,21 @@ u8 _i2c_START(u8 address, u8 addr_mask) {
 }
 
 u8 i2c_ping(u8 address) {
-	u8 ret = _i2c_START(address, I2C_ADDR_WRITE_MASK);
+	u8 ret = _I2C_START(address, I2C_ADDR_WRITE_MASK);
 
 	//# STOP I2C
 	R16_I2C_CTRL1 |= RB_I2C_STOP;
 	return ret;
 }
 
+
+//! ####################################
+//! WRITE DATA FUNCTION
+//! ####################################
+
 u8 i2c_writeData(u8 address, u8 *data, u8 len) {
 	//# STEP 1: Send Start
-	u8 ret = _i2c_START(address, I2C_ADDR_WRITE_MASK);
+	u8 ret = _I2C_START(address, I2C_ADDR_WRITE_MASK);
 	if (ret != 0) return ret;
 
 	for (u8 i = 0; i < len; i++) {
@@ -166,6 +187,7 @@ u8 i2c_writeData(u8 address, u8 *data, u8 len) {
 
 		//# STEP 2: Wait for BTF (Byte Transfer Finished) - all data shifted out
 		check = I2C_WAIT_FOR(R16_I2C_STAR1 & RB_I2C_BTF);
+		// skip error checking to handle clock stretching devices
 		// if (!check) return 0x40 | i2c_get_error();
 	}
 
@@ -178,9 +200,13 @@ u8 i2c_writeData(u8 address, u8 *data, u8 len) {
 }
 
 
+//! ####################################
+//! READ DATA FUNCTION
+//! ####################################
+
 u8 i2c_readData(u8 address, u8 *data, u8 len) {
 	//# STEP 1: Send Start
-	u8 check = _i2c_START(address, I2C_ADDR_READ_MASK);
+	u8 check = _I2C_START(address, I2C_ADDR_READ_MASK);
 	if (check != 0) {
 		R16_I2C_CTRL1 |= RB_I2C_STOP;
 		return check;
@@ -222,7 +248,4 @@ u8 i2c_readData(u8 address, u8 *data, u8 len) {
 	//# STEP 4: STOP I2C
 	R16_I2C_CTRL1 |= RB_I2C_STOP;
 	return i2c_get_error();
-
-	// Re-enable ACK for future operations
-	// R16_I2C_CTRL1 |= RB_I2C_ACK;
 }
