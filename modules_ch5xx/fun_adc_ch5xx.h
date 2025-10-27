@@ -83,7 +83,7 @@ typedef enum {
 	ADC_PGA_GAIN_2 = 0b11		// 6dB 2		range: 0.6V ~ 1.5V
 } ADC_PGA_GAIN_t;
 
-u16 adc_set_config(ADC_FREQ_DIV_t adc_freq, ADC_PGA_GAIN_t pa_gain, u8 differential_mode) {
+u16 adc_init(ADC_FREQ_DIV_t adc_freq, ADC_PGA_GAIN_t pa_gain, u8 differential_mode) {
 	R8_TKEY_CFG &= ~RB_TKEY_PWR_ON;
 	R8_ADC_CFG = RB_ADC_POWER_ON | (pa_gain << 4) | (adc_freq << 6);
 
@@ -171,8 +171,7 @@ void adc_dma_start(u8 auto_cycle, u16 *buf, u8 sample_len, u8 loop) {
 }
 
 void adc_dma_wait() {
-    while (!(R8_ADC_CTRL_DMA & RB_ADC_IF_DMA_END)) {
-    }
+    while (!(R8_ADC_CTRL_DMA & RB_ADC_IF_DMA_END)) {}
 }
 
 void adc_dma_stop() {
@@ -184,18 +183,18 @@ void adc_dma_stop() {
 //! TOUCHKEY FUNCTIONS
 //! ####################################
 
-void adc_touch_setup() {
+void adc_touch_init() {
 	R8_TKEY_CFG |= RB_TKEY_PWR_ON;
-    R8_ADC_CFG = RB_ADC_POWER_ON | RB_ADC_BUF_EN | (1 << 4);
+    R8_ADC_CFG = RB_ADC_POWER_ON | RB_ADC_BUF_EN | (2<<4);
 }
 
 u16 acd_touch_convert(uint8_t charge_count, uint8_t discharge_count) {
 	// charge_time = (RB_TKEY_CHARG_CNT+1)*Tadc
 	// discharge_time = (RB_TKEY_DISCH_CNT+1)*Tadc
-    R8_TKEY_COUNT = (discharge_count << 5) | (charge_count & 0x1f);
-    R8_TKEY_CONVERT = RB_TKEY_START;
-    while(R8_TKEY_CONVERT & RB_TKEY_START);
-    return (R16_ADC_DATA & RB_ADC_DATA);
+	R8_TKEY_COUNT = (charge_count & 0x1f) | (discharge_count << 5);
+	R8_TKEY_CONVERT = RB_TKEY_START;
+	while( R8_TKEY_CONVERT &  RB_TKEY_START );
+    return ( R16_ADC_DATA&RB_ADC_DATA );
 }
 
 

@@ -9,10 +9,12 @@ int main() {
 	u32 time_ref = millis();
 	u16 raw_adc[100];
 
-	adc_set_channel(0);
-	adc_buf_enable(1);
-	adc_touch_setup();
-	adc_set_config(ADC_FREQ_DIV_10, ADC_PGA_GAIN_1_2, 0);
+	funPinMode( PA4, GPIO_ModeIN_Floating );
+	adc_touch_init();
+	R8_ADC_CHANNEL = 2;
+
+	// adc_set_channel(0);
+	// adc_touch_init();
 
 	while(1) {
 		u32 moment = millis();
@@ -21,20 +23,20 @@ int main() {
 		// 	time_ref = moment;
 		// 	// //# get temp reading
 		// 	// adc_set_channel(ADC_TEMPERATURE_CHANNEL);
-		// 	// adc_set_config(ADC_FREQ_DIV_10, ADC_PGA_GAIN_2, 1);
+		// 	// adc_init(ADC_FREQ_DIV_10, ADC_PGA_GAIN_2, 1);
 		// 	// raw_adc = adc_get_singleReading();
 		// 	// printf("\nTemperature: %d mC\r\n", adc_to_mCelsius(raw_adc));
 
 		// 	// //# get battery reading
 		// 	// adc_set_channel(ADC_VBAT_CHANNEL);
-		// 	// adc_set_config(ADC_FREQ_DIV_10, ADC_PGA_GAIN_1_4, 0);
+		// 	// adc_init(ADC_FREQ_DIV_10, ADC_PGA_GAIN_1_4, 0);
 		// 	// raw_adc = adc_get_singleReading();
 		// 	// printf("Battery Voltage: %d mV\r\n", adc_to_mV(raw_adc, ADC_PGA_GAIN_1_4));
 
 		// 	// get ch0 reading PA4
 		// 	adc_set_channel(0);
 		// 	adc_buf_enable(1);
-		// 	adc_set_config(ADC_FREQ_DIV_10, ADC_PGA_GAIN_1_4, 0);
+		// 	adc_init(ADC_FREQ_DIV_10, ADC_PGA_GAIN_1_4, 0);
 			
 		// 	//# get single channel reading
 		// 	// raw_adc[0] = adc_get_singleReading();
@@ -52,11 +54,8 @@ int main() {
 
 		// }
 
-		u16 touch = acd_touch_convert(0x10, 0);
-		if (touch > 2000) {
-			printf("Touch: %d\r\n", touch);
-		}
-		
+		u16 touch = acd_touch_convert(0x10, 2);
+		printf("Touch: %d\r\n", touch);
 	}
 }
 
