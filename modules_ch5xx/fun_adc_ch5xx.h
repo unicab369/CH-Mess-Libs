@@ -1,3 +1,25 @@
+// MIT License
+// Copyright (c) 2025 UniTheCat
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+
 #include "../../fun_modules/fun_base.h"
 
 #define ADC_VBAT_CHANNEL 0x0E
@@ -62,10 +84,10 @@ typedef enum {
 } ADC_PGA_GAIN_t;
 
 u16 adc_set_config(ADC_FREQ_DIV_t adc_freq, ADC_PGA_GAIN_t pa_gain, u8 differential_mode) {
-	// reset
 	R8_TKEY_CFG &= ~RB_TKEY_PWR_ON;
 	R8_ADC_CFG = RB_ADC_POWER_ON | (pa_gain << 4) | (adc_freq << 6);
 
+	// not needed for touchkey
 	if (differential_mode) {
 		// differential
 		R8_ADC_CFG |= RB_ADC_DIFF_EN;
@@ -156,6 +178,26 @@ void adc_dma_wait() {
 void adc_dma_stop() {
     R8_ADC_CTRL_DMA &= ~RB_ADC_DMA_ENABLE;
 }
+
+
+//! ####################################
+//! TOUCHKEY FUNCTIONS
+//! ####################################
+
+void adc_touch_setup() {
+	R8_TKEY_CFG |= RB_TKEY_PWR_ON;
+    R8_ADC_CFG = RB_ADC_POWER_ON | RB_ADC_BUF_EN | (1 << 4);
+}
+
+u16 acd_touch_convert(uint8_t charge_count, uint8_t discharge_count) {
+	// charge_time = (RB_TKEY_CHARG_CNT+1)*Tadc
+	// discharge_time = (RB_TKEY_DISCH_CNT+1)*Tadc
+    R8_TKEY_COUNT = (discharge_count << 5) | (charge_count & 0x1f);
+    R8_TKEY_CONVERT = RB_TKEY_START;
+    while(R8_TKEY_CONVERT & RB_TKEY_START);
+    return (R16_ADC_DATA & RB_ADC_DATA);
+}
+
 
 //! ####################################
 //! ADC OTHER FUNCTIONS
