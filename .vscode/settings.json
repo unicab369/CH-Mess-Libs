@@ -30,7 +30,8 @@
         "ch32v003_flash.h": "c",
         "lib_i2c_ch5xx.h": "c",
         "stdio.h": "c",
-        "util_basic.h": "c"
+        "util_basic.h": "c",
+        "fun_rtc.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

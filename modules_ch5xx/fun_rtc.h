@@ -99,7 +99,7 @@ u32 _calculate_days_of_year(u16 year, u8 month, u8 day) {
 }
 
 // the R32_RTC_CNT_DAY is only 14 bits.
-//Therefore it can only store max 16383 calendar days ~ 44 years
+// Therefore it can only store max 16383 calendar days ~ 44 years
 // We will calculate the days counter from the year since 2020
 
 void fun_rtc_setDate(rtc_date_t date) {
@@ -122,8 +122,6 @@ void fun_rtc_setTime(rtc_time_t time) {
 	u16 total_seconds = time.hr * 3600 + time.min * 60 + time.sec;
 	u16 time_2s = total_seconds / 2;
 	u32 time_32k = (total_seconds % 2) * RTC_TICKS_PER_SECOND;
-    printf("SET: %02d:%02d:%02d -> total_sec=%d, time_2s=%d, time_32k=%lu\r\n",
-			time.hr, time.min, time.sec, total_seconds, time_2s, time_32k);
 	u32 time_counter = (time_2s << 16) | (time_32k & 0xFFFF);
 	_rtc_setTimeCounter(time_counter);
 }
