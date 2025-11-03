@@ -51,7 +51,6 @@ void pwm_init(u8 channel, u8 clock_divider, u8 polarity) {
         case 11: 	pin = PB23; break;
 	}
 
-    printf("Pin: %d\n", pin);
 	funPinMode(pin, GPIO_CFGLR_OUT_10Mhz_PP);
 
     u8 polarity_bit = (1 << (channel - 4));

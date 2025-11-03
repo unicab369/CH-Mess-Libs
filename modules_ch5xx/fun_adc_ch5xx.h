@@ -32,7 +32,7 @@ void adc_print_regCH5xx() {
 // Datasheet Ref: Chapter 15 (pg. 109)
 // PA0: 	SCK1				- AIN9
 // PA1: 	MOSI1				- AIN8
-// PA2: 	MISO1				- AIN7
+// PA2: 	MISO1, TMR3_		- AIN7
 // PA3: 						- AIN6
 // PA4: 	RX3					- AIN0
 // PA5: 	TX3					- AIN1
@@ -55,8 +55,8 @@ void adc_print_regCH5xx() {
 // PB14: 	MOSI_							~ PWM10
 //! PB13: 	SCL, SCK_, TX1_
 //! PB12: 	SDA, RX1_
-//! PB11: 	D+, TMR2
-//! PB10: 	D-, TMR1
+//! PB11: 	D+, TMR2_
+//! PB10: 	D-, TMR1_
 //! PB7: 	TX0								~ PWM9
 // PB6: 									~ PWM8
 //! PB4: 	RX0								~ PWM7
