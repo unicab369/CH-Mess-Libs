@@ -175,6 +175,8 @@ int main() {
 		// test_bh1750(&lux);
 		// sprintf(str_output, "LUX %d", lux);
 		// printf("%s\n", str_output);
+
+		i2c_ina219_setup(0, 3);
 	}
 
 	while(1) {
@@ -193,18 +195,15 @@ int main() {
 			sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
 			printf("%s\n", str_output);
 
-			// u16 shunt_mV, bus_mV, current_uA, power_uW;
-			// test_ina219(&shunt_mV, &bus_mV, &current_uA, &power_uW);
-			// sprintf(str_output, "SHUNT %d uV", shunt_mV);
-			// printf("%s\n", str_output);
+			u16 shunt_mV, bus_mV, current_mA, power_mW;
+			i2c_ina219_reading(&shunt_mV, &bus_mV, &current_mA, &power_mW);
+			sprintf(str_output, "\nShunt %d mV, bus %d mV", shunt_mV, bus_mV);
+			printf("%s\n", str_output);
 
-			// sprintf(str_output, "BUS %d mV", bus_mV);
-			// printf("%s\n", str_output);
+			sprintf(str_output, "%d mA, %d mW", current_mA, power_mW);
+			printf("%s\n", str_output);	
 
-			// sprintf(str_output, "%d uA, %d uW", current_uA, power_uW);
-			// printf("%s\n", str_output);	
-
-			// printf("\n");
+			printf("\n");
 		}
 	}
 }

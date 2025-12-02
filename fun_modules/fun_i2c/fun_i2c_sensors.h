@@ -1,31 +1,12 @@
 // MIT License
 // Copyright (c) 2025 UniTheCat
 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-
 #include "ch32fun.h"
 #include <stdio.h>
 
 #include "lib/lib_i2c.h"
 
-// #define I2C_SENSORS_DEBUG_LOG
+#define I2C_SENSORS_DEBUG_LOG
 
 #define BUF_MAKE_U16(buff) ((buff[0] << 8) | buff[1])
 #define GET_BIT(val, n) ((val >> n) & 1)
@@ -120,16 +101,6 @@ i2c_err_t test_sht3x(u16 *tempF, u16 *hum) {
 // | 6		| 5		| 4		| 3		| 2		| 1		| 0
 // | SHNT4	| SHNT3	| SHNT2	| SHNT1	| MODE3	| MODE2	| MODE1
 
-// Volgate Range (BRNG)
-// 16V => (0 << 13)
-// 32V => (1 << 13) - Default
-
-// Shunt Voltage Range (GP1 GP0)
-// +-40mV 	(8x Gain) => (0 << 11)
-// +-80mV 	(4x Gain) => (1 << 11)
-// +-160mV 	(2x Gain) => (2 << 11)
-// +-320mV 	(1x Gain) => (3 << 11) - Default
-
 // Bus ADC Resolution (BUS4 BUS3 BUS2 BUS1)
 // 0000 	9-bit		84 us		=> (0 << 7)
 // 0001 	10-bit		148 us		=> (1 << 7)
@@ -152,132 +123,131 @@ i2c_err_t test_sht3x(u16 *tempF, u16 *hum) {
 // ...
 // 1111 	12-bitx128	68.10 ms	=> (15 << 3)
 
-// Operating mode
-// 000		Power down					=> (0 << 0)
-// 001		Shunt voltage, triggered	=> (1 << 0)
-// 010		Bus voltage, triggered		=> (2 << 0)
-// 011		Shunt and bus, triggered	=> (3 << 0)
-// 100		ADC OFF (disabled)			=> (4 << 0)
-// 101		Shunt voltage, continuous	=> (5 << 0)
-// 110		Bus voltage, continuous		=> (6 << 0)
-// 111		Shunt and bus, continuous	=> (7 << 0) - Default
+uint16_t ina219_current_divider = 0;
+uint16_t ina219_power_multiplier_uW = 0;
 
-void ina219_config_binary(u16 config) {
-    printf("Config: 0x%04X\n", config);
-    printf("Binary: ");
-    
-    // Print binary with bit positions
-    for (int i = 15; i >= 0; i--) {
-        printf("%d", (config >> i) & 1);
-    }
-    printf("\n");
-    
-    // Bit field breakdown
-    printf("Bit fields:\n");
-    printf("13: BRNG (Bus Range)    = %d\n", GET_BIT(config, 13));
-    printf("12-11: PGA (Shunt Gain) = %d%d\n", GET_BIT(config, 12), GET_BIT(config, 11));
-    printf("10-7: BADC (Bus ADC)    = %d%d%d%d\n", GET_BIT(config, 10), GET_BIT(config, 9), GET_BIT(config, 8), GET_BIT(config, 7));
-    printf("6-3: SADC (Shunt ADC)   = %d%d%d%d\n", GET_BIT(config, 6), GET_BIT(config, 5), GET_BIT(config, 4), GET_BIT(config, 3));
-    printf("2-0: MODE (Operating)   = %d%d%d\n",  GET_BIT(config, 2), GET_BIT(config, 1), GET_BIT(config, 0));
-}
+u16 max_shunt_mV = 0;
 
-u8 INA219_CONFIGURED = 0;
+#define R_SHUNT_mOHM 100
 
-i2c_err_t ina219_configure(u16 max_current_ma, u16 shunt_resistor_mohm) {
-	if (INA219_CONFIGURED == 1) return;
-
-	//# Configure INA219
-	u16 config = (0 << 13) |	// 16V range
-				 (0 << 11) |	// +-40 mV
-				 (3 << 7)  |	// 12-bit Bus Resolution
-				 (3 << 3)  |	// 12-bit Shunt Resolution
-				 (7 << 0);		// Mode: Shunt and Bus Continous
-	u8 config_bytes[2] = {config >> 8, config & 0xFF};
-	// ina219_config_binary(config);
-
-	i2c_err_t ret = i2c_write_reg(&dev_sensor, 0x00, config_bytes, 2);
-	if (ret != I2C_OK) { return ret; }
-
-	ret = i2c_read_reg(&dev_sensor, INA219_REG_CONFIG, I2C_DATA_BUF, 2);
-	if (ret != I2C_OK) { return ret; }
-
-	u16 config_read = BUF_MAKE_U16(I2C_DATA_BUF);
-	// printf("config: 0x%04X\n", config);
-	// printf("\nConfig register: 0x%04X\n", config_read);
-
-
-	//# Calibrate for 1A range (assuming R_shunt = 0.1 Ohm = 100 mOhm)
-	// calib = .04096 / (current_LSB * R_shunt)
-	// current_LSB = max_current/32768
-	// => calib = .04096 / ((max_current/32768) * R_shunt)
-	// => calib = .04096 * 32768 / (max_current * R_shunt)
-	// => calib = .04096 * 32768 * 10^6 / (max_current_ma * R_shunt_mohm)
-	// => calib = 1342,177,280 / (max_current_ma * R_shunt_mohm)
-	// if max_current_ma = 1000 mA, R_shunt_mohm = 100 mOhm, calib = 13421
-
-	u32 cal = 1342177280 / (max_current_ma * shunt_resistor_mohm);
-	u8 cal_bytes[2] = {cal >> 8, cal & 0xFF};
-	i2c_write_reg(&dev_sensor, INA219_REG_CALIB, cal_bytes, 2);
-	// Delay_Ms(1);
-
-	ret = i2c_read_reg(&dev_sensor, INA219_REG_CALIB, I2C_DATA_BUF, 2);
-	if (ret != I2C_OK) { return ret; }
-	u16 cal_read = BUF_MAKE_U16(I2C_DATA_BUF);
-
-	// printf("\nCalibration value: %ld\n", cal);
-	// printf("Calibration register: 0x%04X\n", cal_read);
-
-	INA219_CONFIGURED = 1;
-}
-
-i2c_err_t test_ina219(u16 *shunt_uV, u16 *bus_mV, u16 *current_uA, u16 *power_uW) {
+// bus_vRange = 1 (32V) or 0 (16V)
+// pg_gain = 0 (gain/1 40mV), 1 (gain/2 80mV), 2 (gain/4 160mV), 3 (gain/8 320mV)
+void i2c_ina219_setup(u8 bus_vRange, u8 pg_gain) {
 	dev_sensor.addr = 0x40;
 
 	if (i2c_ping(dev_sensor.addr) != I2C_OK) {
 		printf("INA219 not found\n");
-		return I2C_ERR_BERR;
+		return;
 	}
 
+	// 9bits				= 0x0000	84us
+	// 10bits 				= 0x0080	148us 
+	// 11bits 				= 0x0100	276us 
+	// 12bits 				= 0x0180	532us 
+	// 12bits 2 samples 	= 0x0480	1.06ms
+	// 12bits 4 samples 	= 0x0500	2.13ms
+	// 12bits 8 samples 	= 0x0580	4.26ms	
+	// 12bits 16 samples 	= 0x0600	8.51ms	
+	// 12bits 32 samples 	= 0x0680	17.02ms	
+	// 12bits 64 samples 	= 0x0700	34.05ms	 
+	// 12bits 128 samples 	= 0x0780	68.10ms
+	uint16_t BUS_RESOLUTION_AVERAGE = 0x0180;
+
+	// Shunt Resolution = Bus_Resolution >> 1
+	uint16_t SHUNT_RESOLUTION_AVERAGE = 0x0018;
+
+	// 0x00 = Power Down
+	// 0x01 = Shunt Voltage, triggered
+	// 0x02 = Bus Voltage, triggered
+	// 0x03 = Shunt and Bus Voltage, triggered
+	// 0x04 = ADC Off
+	// 0x05 = Shunt Voltage, continuous
+	// 0x06 = Bus Voltage, continuous
+	// 0x07 = Shunt and Bus Voltage, continuous - Default
+	uint8_t DEVICE_MODE = 0x07;
+
+	if (pg_gain > 3) pg_gain = 3;
+
+	uint16_t config = (bus_vRange << 13) |
+					(pg_gain << 11) |
+					BUS_RESOLUTION_AVERAGE |
+					SHUNT_RESOLUTION_AVERAGE |
+					DEVICE_MODE;
+    printf("INA219 config: 0x%04X\n", config);
+    uint8_t config_bytes[2] = {config >> 8, config & 0xFF};
+
+    i2c_err_t ret;
+    ret = i2c_write_reg(&dev_sensor, 0x00, config_bytes, 2);
+	// Case 0: PGA ÷1 (40mV max)
 	
+    switch (pg_gain) {
+        case 0:	// 40mV
+			max_shunt_mV = 40;
+            break;
+        case 1:	// 80mV
+			max_shunt_mV = 80;
+            break;
+        case 2:	// 160mV
+			max_shunt_mV = 160;
+            break;
+        case 3:	// 320mV - Default
+			max_shunt_mV = 320;
+            break;
+    }
 
-	//# configure and calibrate
-	// max_cal <= 0xFFFF, solve for usuable max_current & shunt
-	// max_current_mA * shunt_mOhm >= 1342,177,280/0XFFFF = 20480
-	// max_current_mA * shunt_mOhm has to be greater than 20480 for a valid calibration value
-	// if shunt_mOhm = 100 mOhm, max_current_mA has to be at least 200 (300 recommended bc of rounding errors)
-	u16 MAX_CURRENT_MA = 300;
-	i2c_err_t ret = ina219_configure(MAX_CURRENT_MA, 140);
-	if (ret != I2C_OK) { return ret; }
+	// Given:
+	// Max_Shunt_Current = Max_shunt_V / R_shunt;
+	// Current_LSB = Max_Shunt_Current / 2^15 = Max_Shunt_Current / 32768
+	// calib = .04096 / (current_LSB * R_shunt)
 
-	//# Read shunt voltage
-	ret = i2c_read_reg(&dev_sensor, INA219_REG_SHUNT, I2C_DATA_BUF, 2);
-	if (ret != I2C_OK) { return ret; }
-	u16 shunt_raw = BUF_MAKE_U16(I2C_DATA_BUF);
-	*shunt_uV = shunt_raw * 10;	
+	// Therefore:
+	// calib = .04096 / ((Max_Shunt_Current/32768) * R_shunt)
+	// calib = .04096 * 32768 / (Max_Shunt_Current * R_shunt)
+	// calib = .04096 * 32768 / (Max_shunt_V)
+	// calib = .04096 * 32768 * 10^6 / (max_shunt_mV * 1000)
+	// calib = 1342,177,280 / (max_shunt_mV * 1000)
+	// Note: shunt_resistor cancel out, the calibration value does not depend on shunt_resistor
+	u32 calibration_value = 1342177280 / (max_shunt_mV * 1000);
+    uint8_t cal_bytes[2] = {calibration_value >> 8, calibration_value & 0xFF};
+    ret = i2c_write_reg(&dev_sensor, 0x05, cal_bytes, 2);
+}
 
-	//# Read bus voltage
-	ret = i2c_read_reg(&dev_sensor, INA219_REG_BUS, I2C_DATA_BUF, 2);
-	if (ret != I2C_OK) { return ret; }
-	u16 bus_raw = BUF_MAKE_U16(I2C_DATA_BUF);
-	*bus_mV = (bus_raw >> 3) * 4;
+void i2c_ina219_reading(
+    int16_t *shunt_uV, int16_t *bus_mV, int32_t *power_mW, int32_t *current_mA
+) {
+	dev_sensor.addr = 0x40;
 
-	//# Read power
-	ret = i2c_read_reg(&dev_sensor, INA219_REG_POWER, I2C_DATA_BUF, 2);
-	if (ret != I2C_OK) { return ret; }
-	// power_LSB = 20 * current_LSB = 20 * max_current/32768
-	u16 power_raw = BUF_MAKE_U16(I2C_DATA_BUF);
-	*power_uW = 20 * power_raw * 1000 * MAX_CURRENT_MA / 32768;
+	if (i2c_ping(dev_sensor.addr) != I2C_OK) {
+		printf("INA219 not found\n");
+		return;
+	}
 
-	//# Read current
-	ret = i2c_read_reg(&dev_sensor, INA219_REG_CURRENT, I2C_DATA_BUF, 2);
-	if (ret != I2C_OK) { return ret; }
-	// current_LSB = max_current/32768
-	// current_mA = current_raw * current_LSB
-	u16 current_raw = BUF_MAKE_U16(I2C_DATA_BUF);
-	*current_uA = current_raw * 1000 * MAX_CURRENT_MA / 32768;
+	i2c_err_t ret;
+	uint8_t buff[2];
+	int32_t raw_value;
 
-	#ifdef I2C_SENSORS_DEBUG_LOG
-		printf("\nINA219 Shunt: %dmV, Bus: %dmV, Current: %dmA\n", 
-				*shunt_mV, *shunt_mV, *current_uA);
-	#endif
+	//# Read shunt voltage in uV
+	ret = i2c_read_reg(&dev_sensor, 0x01, buff, 2);		
+	raw_value = (buff[0] << 8) | buff[1];
+	*shunt_uV = raw_value * 10;
+
+	//# Read bus voltage in mV
+	ret = i2c_read_reg(&dev_sensor, 0x02, buff, 2);
+	raw_value = (buff[0] << 8) | buff[1];
+	*bus_mV = (raw_value >> 3) * 4;
+
+	//# Read power in uW
+	ret = i2c_read_reg(&dev_sensor, 0x03, buff, 2);		
+	raw_value = (buff[0] << 8) | buff[1];
+	// Max_Shunt_Current = Max_shunt_V / R_shunt;
+	// Current_LSB = Max_Shunt_Current / 2^15 = Max_shunt_V / (R_shunt * 2^15)
+	// power = raw_value * 20 * Current_LSB = 20 * Max_shunt_V / (R_shunt * 32768)
+	*power_mW = raw_value * 1000 * 20 * max_shunt_mV / (R_SHUNT_mOHM * 32768);
+
+	//# Read current in mA
+	ret = i2c_read_reg(&dev_sensor, 0x04, buff, 2);
+	raw_value = (buff[0] << 8) | buff[1];
+	// current = raw_value * current_LSB
+	// current = raw_value * Max_Shunt_Current / (R_shunt * 32768)
+	*current_mA = raw_value * 1000 * max_shunt_mV / (R_SHUNT_mOHM * 32768);
 }
