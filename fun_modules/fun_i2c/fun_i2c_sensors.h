@@ -126,7 +126,7 @@ i2c_err_t test_sht3x(u16 *tempF, u16 *hum) {
 uint16_t ina219_current_divider = 0;
 uint16_t ina219_power_multiplier_uW = 0;
 
-u16 max_shunt_mV = 0;
+u32 max_shunt_mV = 0;
 
 #define R_SHUNT_mOHM 100
 
@@ -173,13 +173,19 @@ void i2c_ina219_setup(u8 bus_vRange, u8 pg_gain) {
 					BUS_RESOLUTION_AVERAGE |
 					SHUNT_RESOLUTION_AVERAGE |
 					DEVICE_MODE;
-    printf("INA219 config: 0x%04X\n", config);
+    // printf("INA219 config: 0x%04X\n", config);
     uint8_t config_bytes[2] = {config >> 8, config & 0xFF};
+
+	printf("Config0: 0x%02X, Config1: 0x%02X\n", config_bytes[0], config_bytes[1]);
 
     i2c_err_t ret;
     ret = i2c_write_reg(&dev_sensor, 0x00, config_bytes, 2);
 	// Case 0: PGA ÷1 (40mV max)
-	
+	// return;
+
+	ret = i2c_read_reg(&dev_sensor, 0x00, I2C_DATA_BUF, 2);
+	printf("read config: 0x%02X, 0x%02X\n", I2C_DATA_BUF[0], I2C_DATA_BUF[1]);
+
     switch (pg_gain) {
         case 0:	// 40mV
 			max_shunt_mV = 40;
@@ -210,10 +216,15 @@ void i2c_ina219_setup(u8 bus_vRange, u8 pg_gain) {
 	u32 calibration_value = 1342177280 / (max_shunt_mV * 1000);
     uint8_t cal_bytes[2] = {calibration_value >> 8, calibration_value & 0xFF};
     ret = i2c_write_reg(&dev_sensor, 0x05, cal_bytes, 2);
+
+	ret = i2c_read_reg(&dev_sensor, 0x05, I2C_DATA_BUF, 2);
+	printf("read cal: 0x%02X, 0x%02X\n", I2C_DATA_BUF[0], I2C_DATA_BUF[1]);
+
+	printf("Calibration: 0x%02X, 0x%02X\n", cal_bytes[0], cal_bytes[1]);
 }
 
 void i2c_ina219_reading(
-    int16_t *shunt_uV, int16_t *bus_mV, int32_t *power_mW, int32_t *current_mA
+    int16_t *shunt_uV, u16 *bus_mV, u16 *power_uW, int16_t *current_uA
 ) {
 	dev_sensor.addr = 0x40;
 
@@ -224,30 +235,30 @@ void i2c_ina219_reading(
 
 	i2c_err_t ret;
 	uint8_t buff[2];
-	int32_t raw_value;
 
 	//# Read shunt voltage in uV
 	ret = i2c_read_reg(&dev_sensor, 0x01, buff, 2);		
-	raw_value = (buff[0] << 8) | buff[1];
-	*shunt_uV = raw_value * 10;
+	int16_t raw_shunt = (int16_t)((buff[0] << 8) | buff[1]);
+	*shunt_uV = raw_shunt * 10;
 
 	//# Read bus voltage in mV
 	ret = i2c_read_reg(&dev_sensor, 0x02, buff, 2);
-	raw_value = (buff[0] << 8) | buff[1];
-	*bus_mV = (raw_value >> 3) * 4;
+	u16 raw_bus = (buff[0] << 8) | buff[1];
+	*bus_mV = (raw_bus >> 3) * 4;
+
+	// Max_Shunt_Current = Max_shunt_V / R_shunt;
+	// Current_LSB = Max_Shunt_Current / 2^15 = Max_shunt_V / (R_shunt * 32768)
+	int32_t uCurrent_LSB = 1000000 * max_shunt_mV / (R_SHUNT_mOHM * 32768);
 
 	//# Read power in uW
 	ret = i2c_read_reg(&dev_sensor, 0x03, buff, 2);		
-	raw_value = (buff[0] << 8) | buff[1];
-	// Max_Shunt_Current = Max_shunt_V / R_shunt;
-	// Current_LSB = Max_Shunt_Current / 2^15 = Max_shunt_V / (R_shunt * 2^15)
-	// power = raw_value * 20 * Current_LSB = 20 * Max_shunt_V / (R_shunt * 32768)
-	*power_mW = raw_value * 1000 * 20 * max_shunt_mV / (R_SHUNT_mOHM * 32768);
+	u16 raw_power = (buff[0] << 8) | buff[1];
+	// power = raw_value * 20 * Current_LSB
+	*power_uW = raw_power * 20 * uCurrent_LSB;
 
 	//# Read current in mA
 	ret = i2c_read_reg(&dev_sensor, 0x04, buff, 2);
-	raw_value = (buff[0] << 8) | buff[1];
+	int16_t raw_current = (int16_t)((buff[0] << 8) | buff[1]);
 	// current = raw_value * current_LSB
-	// current = raw_value * Max_Shunt_Current / (R_shunt * 32768)
-	*current_mA = raw_value * 1000 * max_shunt_mV / (R_SHUNT_mOHM * 32768);
+	*current_uA = raw_current * uCurrent_LSB;
 }

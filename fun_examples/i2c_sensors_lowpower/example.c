@@ -169,14 +169,14 @@ int main() {
 	if(i2c_init(&dev_i2c) != I2C_OK) {
 		printf("Err: I2C init failed\n");
 	} else {
-		// i2c_start_scan();
+		i2c_start_scan();
 
 		// u16 lux;
 		// test_bh1750(&lux);
 		// sprintf(str_output, "LUX %d", lux);
 		// printf("%s\n", str_output);
 
-		i2c_ina219_setup(0, 3);
+		// i2c_ina219_setup(0, 3);
 	}
 
 	while(1) {
@@ -185,23 +185,27 @@ int main() {
 		if (moment - time_ref > 2000) {
 			time_ref = moment;
 
-			u16 lux;
-			test_bh1750(&lux);
-			sprintf(str_output, "LUX %d", lux);
-			printf("%s\n", str_output);
+			// i2c_ina219_setup(0, 3);
 
-			u16 tempF, hum;
-			test_sht3x(&tempF, &hum);
-			sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
-			printf("%s\n", str_output);
+			// u16 lux;
+			// test_bh1750(&lux);
+			// sprintf(str_output, "LUX %d", lux);
+			// printf("%s\n", str_output);
 
-			u16 shunt_mV, bus_mV, current_mA, power_mW;
-			i2c_ina219_reading(&shunt_mV, &bus_mV, &current_mA, &power_mW);
-			sprintf(str_output, "\nShunt %d mV, bus %d mV", shunt_mV, bus_mV);
-			printf("%s\n", str_output);
+			// u16 tempF, hum;
+			// test_sht3x(&tempF, &hum);
+			// sprintf(str_output, "TEMP %d, HUM %d", tempF, hum);
+			// printf("%s\n", str_output);
 
-			sprintf(str_output, "%d mA, %d mW", current_mA, power_mW);
-			printf("%s\n", str_output);	
+			// int16_t shunt_uV, current_uA;
+			// u16 bus_mV, power_uW;
+
+			// i2c_ina219_reading(&shunt_uV, &bus_mV, &power_uW, &current_uA);
+			// sprintf(str_output, "\nShunt %d uV, bus %d mV", shunt_uV, bus_mV);
+			// printf("%s\n", str_output);
+
+			// sprintf(str_output, "%d uW, %d uA", power_uW, current_uA);
+			// printf("%s\n", str_output);	
 
 			printf("\n");
 		}
